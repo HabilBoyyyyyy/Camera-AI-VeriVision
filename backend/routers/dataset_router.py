@@ -171,3 +171,63 @@ def delete_dataset_image(
     ds.num_images = max(0, ds.num_images - 1)
     db.commit()
     return {"status": "deleted"}
+
+
+from typing import List
+
+@router.post("/{dataset_id}/add-images")
+async def add_dataset_images(
+    dataset_id: str,
+    path: str = Form(""),
+    files: List[UploadFile] = File(...),
+    user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
+    if not ds or not ds.folder_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    root_dir = Path(ds.folder_path)
+    if path:
+        target_dir = root_dir / path.strip("/")
+    else:
+        target_dir = root_dir
+        
+    target_dir.mkdir(parents=True, exist_ok=True)
+    
+    added_count = 0
+    from validators import safe_extract_zip, _count_images
+    
+    for file in files:
+        if file.filename.endswith(".zip"):
+            # It's a zip update, extract it to the root or target
+            temp_zip = root_dir / f"temp_{file.filename}"
+            with temp_zip.open("wb") as f:
+                shutil.copyfileobj(file.file, f)
+            try:
+                # If they upload a zip, merge it at the target_dir
+                safe_extract_zip(temp_zip, target_dir)
+            except Exception as e:
+                temp_zip.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail=f"Failed to extract zip: {e}")
+            
+            temp_zip.unlink(missing_ok=True)
+        else:
+            # It's a single image
+            ext = Path(file.filename).suffix.lower()
+            if ext in IMG_EXTS:
+                file_path = target_dir / file.filename
+                with file_path.open("wb") as f:
+                    shutil.copyfileobj(file.file, f)
+                added_count += 1
+                
+    # Recalculate total image count
+    new_count = 0
+    for img_path in root_dir.rglob("*"):
+        if img_path.is_file() and img_path.suffix.lower() in IMG_EXTS:
+            new_count += 1
+            
+    ds.num_images = new_count
+    db.commit()
+    
+    return {"status": "success", "total_images": new_count}

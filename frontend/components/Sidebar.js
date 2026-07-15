@@ -58,8 +58,8 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Logo */}
         <div className="flex items-center justify-between h-16 px-5 border-b border-slate-800/80">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 rounded bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center group-hover:border-cyan-400 transition-colors">
-              <ShieldEyeIcon className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
+            <div className="w-8 h-8 rounded flex items-center justify-center">
+              <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain" />
             </div>
             <div>
               <p className="text-sm font-bold text-slate-200 tracking-wide leading-none">VeriVision</p>
