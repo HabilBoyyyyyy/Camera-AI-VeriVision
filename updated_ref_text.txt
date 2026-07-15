@@ -1,0 +1,707 @@
+Camera AI – Dynamic Software
+Full Project Reference Document — Detailed Edition
+Bootcamp final project — WINTEQ / Astra Otoparts use case
+Team: Habil (PM, AI Engineer) · Darrel (Backend, AI Engineer) · Nabil (Frontend / Next.js, Logistics, PR)
+Presentation deadline: July 23, 2026
+This document consolidates every part of the project discussion: the use case analysis, the feasibility/scope decision, the technical design, the folder structure, and the Jira sprint plan — expanded with the reasoning, code examples, and step-by-step walkthroughs behind each decision.
+Table of contents
+(In Word: right-click below and choose "Update Field" — or press Ctrl+A then F9 — to populate this list.)
+1. Use case overview
+This project is based on WINTEQ's "Camera AI – Dynamic Software" use case: a flexible, on-premise AI vision platform that lets industries deploy, train, and scale visual inspection applications without engineers rewriting code for every new customer.
+1.1 Business problem
+The current Camera AI application relies heavily on hardcoded configurations and business logic, requiring direct source code changes by the development team.
+This makes the solution difficult to adapt and replicate across different customers, limiting scalability.
+Maintaining and deploying customized versions increases both development effort and long-term support costs.
+1.2 Goal
+Transform Camera AI into a flexible, configurable platform that adapts to different customer needs.
+Enable users to configure workflows and integrate with external systems without code changes.
+Reduce dependency on the development team for routine customization requests.
+1.3 Original key features (as briefed)
+Modular workflow architecture for flexible process design.
+Configuration-driven setup to minimize or eliminate hardcoded logic.
+Template management for different inspection and business use cases.
+Integration framework for seamless connectivity with external systems.
+User-friendly parameter management through the application interface.
+1.4 What each feature actually means in implementation terms
+These five bullet points are business language. Translated into concrete engineering terms:
+Modular workflow architecture: the inspection process is broken into small, independent steps (resize, crop, classify, decide, log) that can be reordered or swapped without touching other steps. In code, this usually means a list of step objects processed by one generic loop, rather than one long function that does everything in a fixed order.
+Configuration-driven setup: the behavior of the system is controlled by data (JSON/YAML) that is read at runtime, not by source code that has to be recompiled or redeployed. This is the single most important technical concept in this project — see Section 9 for the full schema.
+Template management: templates are just saved configurations (rows in a database). Creating a new inspection type is a database insert, not a code change.
+Integration framework: a defined, predictable way for the system to talk to the outside world (e.g. a REST API endpoint or webhook), so external systems don't need custom code written for them either.
+User-friendly parameter management: forms and UI controls that let a non-programmer edit the JSON configuration indirectly, without ever seeing raw JSON.
+2. Feasibility assessment & scope adjustment
+Given the team size (3 people) and timeline (July 1 – July 23), the full production-grade version described in the original brief is not realistic. The scope below was deliberately cut down to a version that still proves the core concept convincingly.
+2.1 What was cut vs. what was kept
+Kept (in scope)
+Cut (out of scope / future work)
+Web dashboard with live view (webcam feed or image upload as camera input)
+Real industrial protocol support (Profinet, OPC UA, Modbus, GigE Vision, etc.)
+One working AI model doing OK/NG binary classification
+Multiple AI task types (object detection, OCR, segmentation, anomaly detection)
+Configuration-driven setup — form-based template builder (core concept of the use case)
+Drag-and-drop visual workflow builder
+Basic results dashboard (list/table of past inspections with pass/fail)
+Multi-camera support
+Responsive design — works on both desktop and mobile browsers
+User authentication / multi-role access control system
+Single simplified persona role for the working prototype
+Report export (PDF/Excel)
+Real-time alerts/notifications system (a simple visual indicator is enough)
+2.2 Reasoning behind each cut
+Cutting scope isn't just "doing less" — each cut below is a deliberate trade-off, so you can explain it confidently if an evaluator asks "why didn't you build X?"
+Real industrial protocols (Profinet, OPC UA, Modbus, GigE Vision): these require physical hardware and vendor-specific SDKs that a student team won't have access to. A webcam is functionally equivalent for demonstrating the AI + configuration logic, which is what's actually being evaluated.
+Multiple AI task types: each additional task type (detection, OCR, segmentation) is effectively a separate machine learning project with its own data labeling, training, and evaluation cycle. Doing one well beats doing four poorly.
+Drag-and-drop workflow builder: this is a significant frontend engineering effort on its own (drag events, visual connectors, validation) that doesn't change the underlying architecture — a form-based UI proves the same configuration-driven concept with a fraction of the build time.
+Multi-camera support: mostly adds UI complexity (managing multiple video streams and layouts) without teaching anything new about the core concept.
+Authentication / multi-role access: a real auth system (password hashing, sessions/tokens, permission checks) is a substantial security-sensitive feature; getting it wrong is worse than not having it for a prototype.
+Report export and real-time alerts: these are polish features that extend an already-working pipeline. They're good "if time remains" additions but never should block the core demo.
+2.3 Suggested 3-week timeline
+Week 1 (Jul 1–7): Foundation — repo setup, backend/frontend skeletons, dataset preparation.
+Week 2 (Jul 8–14): Core build — template config API, config UI, model training, first integration test.
+Week 3 (Jul 15–21): Polish & prep — bug fixes, UI polish, mobile testing, presentation prep, buffer days.
+Jul 22–23: Final rehearsal, buffer, submission.
+Key presentation strategy: even with a simplified AI model, clearly demonstrate that adding a new inspection type takes just a few clicks/form fields — no code deployment. This directly proves the core value proposition of the use case.
+2.4 Client meeting update (Jul 8, 2026): confirmed full requirements & two-tier roadmap
+On July 8, 2026 the client confirmed the full production vision for this platform, which goes beyond the deliberate cuts in Section 2.1. To stay honest about both the bootcamp deadline and what the client actually wants long-term, this document now tracks two tiers: Phase 1 is the working demo built and presented for the bootcamp (Sections 2.1–2.3, unchanged); Phase 2 is the full production target the client confirmed, which needs real hardware, more time, and likely a larger team to build properly.
+Requirements confirmed in the meeting:
+New inspection types can be added without writing code or manually training a model from scratch.
+Built-in templates cover common/general inspection types out of the box.
+For anything a template does not cover, the user directly supplies the input source, a new dataset, and the desired output type.
+Camera input is user-selectable by type and count, depending on how many cameras the deployed system has.
+Cameras connect over both USB and Ethernet.
+Inspections can be triggered by a PLC signal, not only a manual button click.
+Uploading a new dataset also lets the user configure the protocol/workflow steps for that new inspection.
+The system trains the model on the new dataset automatically — no code and no manual training step for the user.
+Output is sent back to a PLC over Modbus.
+Every inspection still ends in an OK/NG judgment.
+Every inspection is written to a history/log.
+How each requirement maps across the two phases:
+Requirement
+Phase 1 (this bootcamp demo)
+Phase 2 (client production target)
+Camera input
+Single webcam via browser (getUserMedia)
+User-selectable USB and Ethernet industrial cameras, multiple cameras
+Inspection trigger
+Manual click, plus simulated PLC trigger over Modbus TCP (software only)
+Real PLC hardware sending the same signal
+Output / actuation
+Saved to database + on-screen pass/fail, plus simulated Modbus result register write
+Same write, to a real PLC-driven actuator/sorter
+New inspection setup
+Form-based template builder (Section 9)
+Same config UI, plus dataset upload feeding automated training
+Model training
+Trained once, manually, by the AI teammate before the demo
+Automatic training pipeline triggered by a new dataset upload, no manual step
+Templates
+One or two demo templates
+Full template library covering common inspection types
+Verified with the team (Jul 8, 2026): no physical PLC or industrial camera is available yet. So for Phase 1, the Modbus trigger and output loop above will run as a software simulation only — a pymodbus server standing in for the PLC, exercising the exact same protocol and register layout described in Section 9.2. This proves the pattern honestly without hardware in hand; swapping in a real PLC later only means changing an IP address and a register map, not the logic. Camera input is a separate story: moving to real USB or Ethernet industrial cameras still requires physical hardware the team does not have, so that piece stays Phase 2 only, unlike the Modbus loop.
+Sections 3.1, 5, and 9.2 mark exactly where each Phase 2 piece plugs into the current architecture, so moving from demo to production is a matter of adding hardware-facing modules, not a redesign.
+3. Web accessibility: desktop and mobile
+The system has two distinct layers, and only one of them can live in the browser.
+3.1 Layer A — camera / sensor communication (hardware layer)
+Protocols like GigE Vision, Profinet, EtherNet/IP, Modbus TCP, OPC UA, MQTT, and CameraLink cannot be accessed directly from a web browser (browsers are sandboxed for security). This layer must run as a backend service/agent installed on-premise, which connects to the camera(s), runs AI inference, and sends results to the web app via a normal API (REST/WebSocket).
+Why browsers can't do this directly: browsers deliberately restrict access to raw network sockets, serial ports, and industrial fieldbus protocols as a security measure — a malicious website should never be able to reach into a factory network. This isn't a limitation you can code around; it's intentional sandboxing built into every modern browser. That's why an on-premise backend agent (a normal program running outside the browser) is required for this layer.
+Phase 2 addition: a PLC fits into this same hardware layer, on both ends of the pipeline — as a trigger (a PLC signal starts an inspection) and as an output actuator (the backend agent writes the OK/NG result back to the PLC over Modbus TCP). Neither can happen inside the browser, for the same sandboxing reason above; both would live in the on-premise backend agent alongside the camera drivers.
+3.2 Layer B — configuration, monitoring, dashboard (software layer)
+This layer can be fully web-based. A responsive web app (CSS breakpoints, flexible grids) adapts to desktop, tablet, and mobile. Optionally, building it as a Progressive Web App (PWA) lets users "install" it on their phone home screen with some offline capability, without needing separate iOS/Android apps.
+Practical responsive design technique: use CSS media queries to change the layout at defined breakpoints, e.g. a single column on phones and a multi-column grid on desktop. The frontend scaffold's stylesheet uses exactly this pattern: a mobile-first single-column grid that switches to two columns above 768px screen width — small enough to write, easy enough to explain in a presentation, and it satisfies the "works on desktop and mobile" requirement without extra libraries.
+Summary: the camera + AI model does its work on a machine physically near the camera (the "edge"), and the web app is the control panel/dashboard that any device with a browser can open to configure, monitor, and view results. This is a standard industrial pattern.
+4. Simple explanation
+4.1 English
+Imagine a factory that uses cameras to automatically check if a product has defects (scratches, missing parts, wrong assembly, etc). Right now, WINTEQ's system only works because engineers manually write code for each specific factory setup — a new customer means rewriting parts of the code, which is slow and expensive. This use case asks for a smarter, configurable version: a platform where a non-programmer (like a factory engineer) can click, drag, and set up a new inspection process through a web interface — no coding needed — adaptable to different cameras, products, and customers.
+4.2 Bahasa Indonesia
+Bayangkan sebuah pabrik yang menggunakan kamera untuk secara otomatis memeriksa apakah suatu produk cacat (baret, komponen hilang, salah rakit, dll). Saat ini, sistem Camera AI milik WINTEQ hanya bisa berfungsi karena engineer harus menulis kode secara manual untuk setiap setup pabrik yang berbeda. Kalau ada customer baru, engineer harus menulis ulang sebagian kode — proses yang lambat dan mahal. Use case ini meminta dibangunnya versi yang lebih pintar dan dapat dikonfigurasi: sebuah platform di mana orang non-programmer (misalnya engineer pabrik) cukup klik, drag, dan atur proses inspeksi baru lewat antarmuka web — tanpa perlu coding — dan sistem ini bisa menyesuaikan diri ke kamera, produk, dan customer yang berbeda-beda.
+5. Recommended technical solution
+Frontend: Next.js (per final team decision — Nabil's role) for the configuration/dashboard UI.
+Backend/API: Python with FastAPI — strong AI/ML library support, needed since the inference engine uses PyTorch/TensorFlow-based models.
+AI inference engine: a pre-trained or fine-tuned classification model (e.g. MobileNet/ResNet via transfer learning) for OK/NG sorting.
+Database: PostgreSQL or SQLite — stores inspection templates, results, and logs.
+Workflow configuration: each inspection "workflow" is stored as a JSON definition rather than code — this is the core mechanism that satisfies "no hardcoded logic" (see Section 9).
+Camera simulation: a webcam or pre-recorded image/video dataset stands in for a real industrial camera — an acceptable substitution for an academic project.
+Phase 2 hardware integration (target, not built for the bootcamp demo): pymodbus for PLC communication over Modbus TCP, plus an industrial camera SDK (e.g. Harvesters/Aravis for GigE Ethernet cameras, or a vendor USB3 Vision SDK) running inside the same on-premise backend agent as Layer A.
+5.1 Why these choices, and what the alternatives were
+Chosen
+Alternatives considered, and why not
+FastAPI (backend)
+Django: heavier, includes a lot of built-in features (admin panel, ORM) you don't need for an API-only backend. Flask: lighter but requires more manual setup for data validation, which FastAPI gives you for free via Pydantic.
+Next.js (frontend)
+Plain React (Create React App / Vite): works fine too, but Next.js gives built-in routing and simpler deployment, which matters more once the team is short on time.
+SQLite for development, PostgreSQL optional for production
+MongoDB (NoSQL): works, but since templates and results both have a clear tabular structure (columns, relationships), a relational database is a more natural fit and easier to reason about for a beginner.
+Transfer learning on MobileNet/ResNet
+Training a model completely from scratch: requires far more labeled data and compute time than a 3-week project allows. Transfer learning re-uses a model already trained on millions of general images and only retrains the final layers on your specific defect dataset.
+Beginner note on transfer learning: think of it like hiring someone who already knows how to see shapes, edges, and textures in general, and just teaching them the specific difference between "scratched" and "not scratched" — instead of teaching someone to see from zero. This is why it needs far less data and time than training from scratch.
+6. Features implemented for the web product
+6.1 Must-have (core MVP)
+Live view — real-time camera feed with overlay showing detection results.
+Workflow/template builder — form-based UI to define inspection steps.
+Result dashboard — list of inspection results with timestamp, image, pass/fail status.
+Model management — select which trained AI model to use for a given template.
+Basic analytics — pass rate / defect rate over time.
+Alerts — flag when defect rate crosses a threshold.
+6.2 Nice-to-have (if time allows)
+Multi-camera support.
+Report export (PDF/Excel) for audit trail purposes.
+Integration framework demo — a mock webhook/API endpoint.
+User authentication tied to persona roles.
+Mobile-optimized simplified view for quick checks.
+7. Persona roles
+Recommendation: start with 1 role for the working prototype, to keep auth/permission complexity minimal and get a working demo faster.
+Configurator/Engineer — sets up inspection workflows, uploads models, defines thresholds (full desktop-oriented UI).
+Operator/Viewer — monitors live results, views dashboards, gets alerts (mobile-friendly quick-glance access).
+These two roles can be presented conceptually as a "future scalability" feature (e.g. a simple is_admin flag) without adding much build complexity, while still showing awareness of the real-world user needs.
+8. AI tasking scope
+Realistic AI task types for a visual inspection platform, and which one is in scope for this project:
+Task
+What it does
+Difficulty
+Typical tool
+In scope?
+Binary classification (OK/NG)
+Is the product good or defective
+Easiest
+MobileNet/ResNet + PyTorch
+Yes — core MVP
+Object detection
+Draws boxes around defects
+Moderate
+YOLOv8 (Ultralytics)
+Future work
+Counting
+Counts components present
+Moderate
+Built on detection output
+Future work
+OCR / barcode reading
+Reads text or serial numbers
+Moderate
+Tesseract / EasyOCR
+Future work
+Anomaly detection
+Flags unusual items, no labels needed
+Harder
+Isolation Forest / Autoencoder
+Future work
+Segmentation
+Pixel-level defect area measurement
+Hardest
+U-Net / Mask R-CNN
+Future work
+Decision: build binary classification solidly as the working demo. The architecture (see Section 9's JSON schema) is designed to be conceptually extensible to the other task types without a full redesign — this can be stated directly in the report as a scalability argument.
+9. Configurable workflow JSON schema
+This is the core mechanism that makes the system "configurable instead of hardcoded." Instead of writing per-customer if/else logic, inspection logic is stored as data (JSON), and the backend reads that data and executes steps dynamically.
+{
+  "template_id": "tmpl_0001",
+  "template_name": "Bracket Scratch Inspection",
+  "description": "Detects surface scratches on metal brackets",
+  "input_source": {
+    "type": "webcam",
+    "device_id": 0
+  },
+  "preprocessing_steps": [
+    { "step_type": "resize", "params": { "width": 224, "height": 224 } },
+    { "step_type": "crop", "params": { "x": 50, "y": 50, "width": 400, "height": 400 } }
+  ],
+  "inspection_step": {
+    "step_type": "classification",
+    "model_id": "model_scratch_v1",
+    "confidence_threshold": 0.80
+  },
+  "decision_rule": {
+    "pass_label": "OK",
+    "fail_label": "NG",
+    "min_confidence_to_pass": 0.80
+  },
+  "output_actions": [
+    { "action_type": "save_result", "params": { "store_image": true } },
+    { "action_type": "log_event", "params": { "log_level": "info" } }
+  ]
+}
+Why this structure works: preprocessing_steps and output_actions are arrays, so the backend can loop through them generically — adding a new step type later means adding a new case to one loop, not writing a new function per customer. decision_rule separates the AI's raw confidence output from the business pass/fail threshold, so different customers can use different thresholds without retraining the model.
+9.1 The generic executor, in actual Python
+This is what makes the schema above more than just documentation — it's the real function that reads a template and runs it. Notice there is no if/else chain per customer; the same function handles every template.
+def run_workflow(template: dict, image):
+    """Reads a template dict (parsed from JSON) and executes each step in order."""
+ 
+    # 1. Run preprocessing steps in the order they appear in the template
+    for step in template["preprocessing_steps"]:
+        step_type = step["step_type"]
+        params = step["params"]
+ 
+        if step_type == "resize":
+            image = resize_image(image, params["width"], params["height"])
+        elif step_type == "crop":
+            image = crop_image(image, params)
+        # Adding a new preprocessing step later just means adding
+        # another elif here - nothing else in the codebase changes.
+ 
+    # 2. Run the AI inference step
+    inspection = template["inspection_step"]
+    label, confidence = classify_image(image, model_id=inspection["model_id"])
+ 
+    # 3. Apply the business decision rule from the template
+    rule = template["decision_rule"]
+    passed = confidence >= rule["min_confidence_to_pass"]
+    result = rule["pass_label"] if passed else rule["fail_label"]
+ 
+    # 4. Run output actions (save to DB, log, etc.)
+    for action in template["output_actions"]:
+        run_action(action["action_type"], action["params"], result)
+ 
+    return {"label": label, "confidence": confidence, "result": result}
+This function is what lives in backend/app/services/workflow_executor.py in the project scaffold. Once it's written and tested once, creating a brand-new inspection type for a new customer never touches this file again — it's purely a matter of saving a new template JSON to the database.
+9.2 Phase 2 target schema — full client vision
+The Phase 1 schema in Section 9 covers webcam input and manual model selection. The client’s full vision extends the same JSON shape — nothing about the executor in Section 9.1 needs to change, only new fields are read by new step handlers:
+{
+  "template_id": "tmpl_0042",
+  "template_name": "Housing Crack Inspection",
+  "input_source": {
+    "type": "camera",
+    "camera_type": "ethernet",        // "usb" | "ethernet" | "webcam"
+    "camera_id": "cam_line3_02"
+  },
+  "trigger": {
+    "type": "plc_signal",             // "manual" | "plc_signal"
+    "plc_address": "10.0.4.21",
+    "signal_register": "40001"
+  },
+  "dataset_source": {
+    "dataset_id": "ds_housing_crack_v1",
+    "auto_train": true                 // triggers the training pipeline, no code
+  },
+  "inspection_step": {
+    "step_type": "classification",
+    "model_id": "model_housing_crack_v1",
+    "confidence_threshold": 0.80
+  },
+  "decision_rule": {
+    "pass_label": "OK",
+    "fail_label": "NG",
+    "min_confidence_to_pass": 0.80
+  },
+  "output_actions": [
+    { "action_type": "save_result", "params": { "store_image": true } },
+    { "action_type": "log_event", "params": { "log_level": "info" } },
+    { "action_type": "plc_write", "params": { "protocol": "modbus_tcp",
+        "plc_address": "10.0.4.21", "result_register": "40002" } }
+  ]
+}
+Two additions do the real work here. First, "trigger" decouples what starts an inspection (a click, or a PLC register flipping) from the executor itself — the executor in Section 9.1 does not need to know which one fired it. Second, "dataset_source.auto_train" is what turns "upload a new dataset" into a working model without a human touching code: it points the training pipeline (Section 8) at a dataset instead of requiring the AI teammate to run a notebook by hand.
+None of this is built for the July 23 demo — it is documented here so the Phase 1 architecture can grow into it without a rewrite.
+10. System architecture
+Client devices and a camera feed into a backend server containing an API layer, an AI inference engine, and a database.
+Client devices (desktop or mobile browser) only ever talk to the API layer.
+The camera feeds images into the API layer, which forwards them to the AI inference engine.
+Both the API layer and the inference engine write to the database — templates on creation, results on every inspection run.
+Client devices and the camera can be swapped or extended later without touching backend logic — this is what makes the "configuration-driven" claim true in the architecture, not just in the pitch.
+10.1 Step-by-step walkthrough of one inspection
+Tracing a single inspection from start to finish through the diagram above:
+1. The operator opens the dashboard in a browser (desktop or mobile) and clicks "Run inspection."
+2. The browser captures a frame from the camera feed (see Section 12) and sends it to the API layer as an HTTP request.
+3. The API layer looks up the selected template from the database — this is the JSON configuration from Section 9.
+4. The API layer calls the workflow executor, which reads the template and runs each preprocessing step on the image.
+5. The executor calls the AI inference engine, passing the processed image and the model_id from the template.
+6. The AI inference engine returns a label and confidence score back to the executor.
+7. The executor applies the decision_rule from the template to turn that confidence score into a pass/fail result.
+8. The result is saved to the database and returned back through the API layer to the browser.
+9. The dashboard updates the results table with the new entry, without the page needing to reload.
+Every one of these nine steps is the same regardless of which template is used — only the data inside the template changes. That consistency is exactly what "configuration-driven, not hardcoded" looks like when it's actually running.
+11. Project folder structure
+camera-ai-project/
+├── backend/              FastAPI backend (Python)
+│   ├── app/
+│   │   ├── main.py               entry point
+│   │   ├── routers/              API endpoints (templates, inspections)
+│   │   ├── services/             workflow executor, AI inference
+│   │   ├── schemas/              data validation models
+│   │   └── models/               database models
+│   ├── ai_models/                trained model files (.pt, .h5, etc)
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/              Dashboard (Next.js)
+│   ├── index.html / pages/
+│   └── src/
+│       ├── assets/style.css      responsive styling (desktop + mobile)
+│       ├── services/api.js       centralized backend calls
+│       └── pages/dashboard.js    page logic
+└── docs/                  Diagrams, schema docs, presentation notes
+11.1 What each key file actually does
+File
+Purpose
+backend/app/main.py
+Starts the FastAPI server and registers all the route groups (templates, inspections).
+backend/app/routers/templates.py
+Handles creating, listing, and fetching inspection templates — the "save configuration" side.
+backend/app/routers/inspections.py
+Handles running an inspection and fetching past results — the "use configuration" side.
+backend/app/services/workflow_executor.py
+The generic loop from Section 9.1 that reads a template and runs it step by step.
+backend/app/services/ai_inference.py
+Wraps the trained model — the only file the AI teammate needs to touch to swap in a real model.
+backend/app/schemas/template_schema.py
+Defines the exact shape of a valid template using Pydantic, so bad data gets rejected automatically with a clear error.
+frontend/src/services/api.js
+Every fetch() call to the backend lives here, so the backend URL only needs to change in one place.
+frontend/src/pages/dashboard.js
+Wires up the HTML form and buttons to the API functions, and refreshes the UI with new data.
+Team division by folder:
+Person A (Backend/API): backend/app/routers/, backend/app/schemas/, database setup.
+Person B (Frontend): frontend/ — forms, dashboard, responsive design.
+Person C (AI/ML): backend/app/services/ai_inference.py, model training, backend/ai_models/.
+12. Camera integration: current state & gaps
+The live camera preview (getUserMedia) is working, but a genuine gap exists between "camera shows up on screen" and "camera image gets inspected": there was no step that captures a still frame and sends it to the backend for inference.
+Frontend gap: a function to grab a frame from the <video> element (via <canvas>), convert it to an image, and send it via fetch() to the backend.
+Backend gap: the inspection run endpoint needs to actually accept that image as a file upload (FastAPI UploadFile) instead of ignoring it.
+Both gaps have been added as explicit tasks in the Jira plan (Section 13, highlighted rows).
+12.1 Closing the frontend gap: capturing a frame
+The <video> element only shows a live stream — it can't be sent directly over the network. The trick is to draw the current video frame onto a hidden <canvas> element, which can export its content as an image file. This function would be added to dashboard.js:
+function captureFrame() {
+  const video = document.getElementById("camera-feed");
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+ 
+  // Draw the current video frame onto the canvas
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+ 
+  // Convert the canvas content into an image file (Blob)
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
+  });
+}
+ 
+async function runInspectionWithImage(templateId) {
+  const imageBlob = await captureFrame();
+  const formData = new FormData();
+  formData.append("image", imageBlob, "capture.jpg");
+ 
+  const res = await fetch(
+    `${API_BASE}/inspections/run/${templateId}`,
+    { method: "POST", body: formData }
+  );
+  return res.json();
+}
+12.2 Closing the backend gap: accepting the image
+FastAPI's UploadFile type handles file uploads with very little extra code. The inspection router needs updating so it actually receives and uses the image instead of ignoring it:
+from fastapi import APIRouter, UploadFile, File
+from PIL import Image
+import io
+ 
+@router.post("/run/{template_id}")
+async def run(template_id: str, image: UploadFile = File(...)):
+    # Read the uploaded bytes and turn them into an image object
+    image_bytes = await image.read()
+    pil_image = Image.open(io.BytesIO(image_bytes))
+ 
+    # Pass the real captured image into the workflow executor
+    # instead of the placeholder `None` used in the stub version
+    result = run_inspection(template_id, pil_image)
+    _results_log.append(result)
+    return result
+With these two pieces in place, the full loop described in Section 10.1 becomes real: a click on "Run inspection" genuinely captures the live camera frame, sends it to the backend, and gets back a result computed from that exact image.
+13. Jira sprint plan & task distribution
+Board type: Scrum, 3 sprints. Rows shaded in light orange are additions made after reviewing the plan for camera-integration gaps.
+13.1 Sprint overview
+Task
+Type
+Assignee
+Priority
+Due date
+Sprint 1 — Foundation & initial builds
+Jul 1 – Jul 10
+Sprint 2 — Feature completion & integration
+Jul 11 – Jul 18
+Sprint 3 — Testing, polish & presentation prep
+Jul 19 – Jul 23
+13.2 Epics
+Epic 1: Project Foundation & Planning
+Sprint 1
+Task
+Type
+Assignee
+Priority
+Due date
+Finalize project scope & requirements doc
+Task
+Habil
+Highest
+Jul 2
+Set up Jira board (epics, sprints, backlog)
+Task
+Habil
+Highest
+Jul 1
+Set up Git repo & branching strategy
+Task
+Habil
+High
+Jul 2
+Design system architecture diagram
+Task
+Habil
+Medium
+Jul 2
+Design JSON workflow/template schema
+Task
+Habil
+Medium
+Jul 3
+Gather / prepare defect image dataset
+Story
+Darrel
+Highest
+Jul 4
+Set up team communication channel & meeting cadence
+Task
+Nabil
+Low
+Jul 1
+Epic 2: Backend & API Development
+Sprint 1–2
+Task
+Type
+Assignee
+Priority
+Due date
+Set up FastAPI project skeleton
+Story
+Darrel
+Highest
+Jul 4
+Design & set up database schema
+Story
+Darrel
+High
+Jul 6
+Build Template CRUD endpoints
+Story
+Darrel
+High
+Jul 8
+Build Inspection run endpoint
+Story
+Darrel
+High
+Jul 9
+Update inspection endpoint to accept image upload (UploadFile)
+Story
+Darrel
+High
+Jul 13
+Connect database to template/inspection endpoints
+Story
+Darrel
+High
+Jul 11
+Build workflow executor logic
+Story
+Darrel
+Medium
+Jul 12
+Write API documentation (for team reference)
+Task
+Darrel
+Low
+Jul 13
+API bug fixing & cleanup
+Task
+Darrel
+Medium
+Jul 15
+Epic 3: AI Model Development
+Sprint 1–2
+Task
+Type
+Assignee
+Priority
+Due date
+Research & select classification approach
+Task
+Habil
+Highest
+Jul 3
+Preprocess & label dataset
+Story
+Habil
+High
+Jul 6
+Train baseline classification model
+Story
+Habil
+Highest
+Jul 10
+Evaluate model accuracy & tune
+Story
+Habil
+High
+Jul 12
+Wrap model in inference function/endpoint
+Story
+Habil
+High
+Jul 13
+Integrate AI inference with backend executor
+Story
+Habil, Darrel
+Highest
+Jul 14
+Model performance testing on sample images
+Task
+Habil
+Medium
+Jul 16
+Epic 4: Frontend Dashboard (Next.js)
+Sprint 1–2
+Task
+Type
+Assignee
+Priority
+Due date
+Set up Next.js project & routing
+Story
+Nabil
+Highest
+Jul 4
+Build responsive layout (desktop + mobile)
+Story
+Nabil
+High
+Jul 7
+Build template creation form UI
+Story
+Nabil
+High
+Jul 9
+Build template list/selection UI
+Story
+Nabil
+Medium
+Jul 10
+Build live camera view component
+Story
+Nabil
+High
+Jul 12
+Add capture-frame-and-send-to-backend function
+Story
+Nabil
+High
+Jul 13
+Build inspection results dashboard UI
+Story
+Nabil
+High
+Jul 13
+Connect frontend to backend API
+Story
+Nabil
+Highest
+Jul 14
+UI polish & responsive fine-tuning
+Task
+Nabil
+Medium
+Jul 17
+Epic 5: Integration & Testing
+Sprint 2–3
+Task
+Type
+Assignee
+Priority
+Due date
+Camera-to-AI pipeline test (capture → backend → inference → result)
+Story
+Habil, Darrel, Nabil
+Highest
+Jul 15
+End-to-end integration test (full flow)
+Story
+Habil, Darrel, Nabil
+Highest
+Jul 15
+Bug fixing round 1
+Task
+Habil, Darrel, Nabil
+High
+Jul 16
+Mobile responsiveness testing
+Task
+Nabil
+Medium
+Jul 17
+Cross-browser/device testing
+Task
+Nabil
+Medium
+Jul 18
+Bug fixing round 2
+Task
+Habil, Darrel, Nabil
+High
+Jul 19
+Epic 6: Documentation & Presentation
+Sprint 3
+Task
+Type
+Assignee
+Priority
+Due date
+Write project report/documentation
+Story
+Habil
+High
+Jul 18
+Prepare slide deck
+Story
+Nabil
+Highest
+Jul 20
+Coordinate presentation logistics (equipment, schedule, room)
+Task
+Nabil
+Medium
+Jul 20
+Prepare live demo script/flow
+Task
+Habil
+High
+Jul 21
+Full team rehearsal
+Task
+Habil, Darrel, Nabil
+Highest
+Jul 21
+Final buffer for last-minute fixes
+Task
+Habil, Darrel, Nabil
+Highest
+Jul 22
+Final presentation
+Milestone
+Habil, Darrel, Nabil
+Highest
+Jul 23
+13.3 Task distribution summary
+Task
+Type
+Assignee
+Priority
+Due date
+Habil — PM, AI Engineer
+21 tasks/stories
+Darrel — Backend, AI Engineer
+18 tasks/stories
+Nabil — Frontend (Next.js), Logistics, PR
+21 tasks/stories
+Note: several tasks list multiple names (integration, testing, rehearsal) because those stages genuinely need the whole team together — the count reflects every task each person appears on, not just tasks owned alone.
+13.4 Jira setup checklist
+Create the 6 epics listed above in the Backlog view.
+Create each Story/Task under its epic using the Epic Link field.
+Set Priority on each issue to match the tables above.
+Set Due Date on each issue (separate from Sprint start/end dates).
+Assign each issue to the correct team member.
+Group issues into Sprint 1 / 2 / 3 based on due date ranges, then start Sprint 1 immediately so the burndown chart tracks from day one.

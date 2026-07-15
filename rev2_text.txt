@@ -1,0 +1,292 @@
+Camera AI – Dynamic Software
+Full Project Reference Document — Revision 2
+Bootcamp final project — WINTEQ / Astra Otoparts use case
+Team: Habil (PM, AI Engineer) · Darrel (Backend, AI Engineer) · Nabil (Frontend / Next.js, Logistics, PR)
+Presentation deadline: July 23, 2026
+This revision replaces binary OK/NG classification with object detection (bounding boxes + defect type), adds automatic spare-part identification and AI-generated descriptions, introduces two-tier OK/NG (per-part and per-set), and adds an inspection data Q&A chatbot. Sections that materially changed from Revision 1 are noted.
+Table of contents
+(In Word: right-click below and choose "Update Field" — or press Ctrl+A then F9 — to populate this list.)
+1. Use case overview (revised)
+This project is based on WINTEQ's "Camera AI – Dynamic Software" use case, now extended beyond the original brief's request to also identify what part is being inspected, describe it, and answer questions about inspection history.
+1.1 Business problem
+The current Camera AI application relies heavily on hardcoded configurations and business logic, requiring direct source code changes by the development team.
+This makes the solution difficult to adapt and replicate across different customers, limiting scalability.
+Operators have no way to ask questions about past inspection results without going through a developer or manually digging through logs.
+1.2 Goal (revised)
+Detect defects visually with bounding boxes and defect-type labels, not just a pass/fail label for the whole image.
+Automatically recognize which spare part (and which product set it belongs to) is in front of the camera, without an operator manually selecting a template.
+Generate a natural-language description of the identified part.
+Produce two levels of pass/fail decision: one per individual part, and one per full set of parts, based on the pass rate within that set.
+Let operators ask natural-language questions about inspection history and get answers pulled from the database.
+1.3 What changed from Revision 1
+Revision 1 (previous)
+Revision 2 (this document)
+Single AI task: binary OK/NG classification
+Object detection: bounding boxes + specific defect type per detected defect
+Operator manually selects an inspection template
+System auto-identifies the part/set and picks the matching profile
+No part description
+AI-generated natural-language description of the identified part
+One OK/NG decision per image
+Two-tier decision: per-part AND per-set (based on pass percentage)
+No chatbot
+Inspection Data Q&A chatbot for the Operator/Configurator
+2. Feasibility assessment & scope adjustment (revised)
+This section is the most important one to read carefully. The scope below is meaningfully larger than what Revision 1 concluded was feasible for a 3-person, 3-week bootcamp timeline (Jul 1 – Jul 23) — and Revision 1's scope was already a deliberately trimmed-down version of the original brief.
+2.1 Honest feasibility note — please read before committing to this scope
+Each of the four new requirements is individually reasonable and well-scoped on its own. Combined, though, they add up to meaningfully more work than the original plan budgeted for:
+Object detection instead of classification: needs bounding-box-annotated data (harder to source and/or label than classification data) and a different training pipeline (YOLO-style, not simple transfer learning on a classifier head).
+Part identification: a second recognition task — either a second model, or folded into the same detector by adding part-type classes, which changes how the dataset needs to be structured.
+Description generation: the most open-ended new requirement — see Section 11 for why a fully generative image-captioning model is not realistic on this timeline, and what to build instead.
+Two-tier OK/NG: mostly a backend logic and data-modeling addition rather than a new AI task, so this is the least risky of the four.
+Chatbot: does not require training a model at all if built on an LLM API (see Section 5 and Section 12) — but it is a new backend service, new frontend UI, and a new failure surface (a chatbot that can misread the database or hallucinate an answer).
+Recommendation: treat this document as the target architecture, but agree explicitly as a team on which pieces are demoed fully working versus demoed as a smaller proof-of-concept by July 23. Section 2.3 below marks a suggested "minimum defensible demo" version of each new feature, separate from the full version described in the rest of this document. This is not a reason to abandon the plan — it is the same kind of deliberate, defensible scoping decision Revision 1 already made once.
+2.2 Suggested phasing if the deadline does not move
+Phase 1 (must work for the demo): object detection with bounding boxes on at least one defect type; part identification limited to a small, fixed set of known parts (2-4 types is enough to prove the concept); per-part OK/NG.
+Phase 2 (should work, simplify if short on time): per-set OK/NG aggregation; description generation using the template-based approach from Section 11 (not a trained captioning model).
+Phase 3 (stretch goal, acceptable to demo as a smaller working slice): the chatbot, scoped to a small fixed set of question types rather than fully open-ended natural language (see Section 12.3).
+This phasing keeps every feature honestly represented in the presentation — a smaller but fully working chatbot demo is more convincing than a broad one that breaks on stage.
+2.3 What is kept vs. deferred, updated
+In scope for this revision
+Still deferred to future work
+Object detection (bounding boxes + defect type) for one product category
+Real industrial camera protocols (OPC UA, Modbus, GigE Vision) — still simulated via webcam
+Automatic part/set identification for a small, fixed catalog of parts
+Open-ended part catalog that scales to arbitrary new parts without retraining
+Template-based (non-generative) part description
+Fully generative image captioning / vision-language model description
+Two-tier OK/NG (per-part and per-set)
+Configurable pass-percentage thresholds per customer (fixed default threshold for now)
+Chatbot answering a defined set of question types over inspection history
+Fully open-ended chatbot query capability with no guardrails on question scope
+Single persona role for the working prototype
+Full multi-role authentication system
+3. Web accessibility: desktop and mobile
+Unchanged from Revision 1 in principle — the camera/AI layer runs on-premise near the camera, and the web dashboard is the control panel. One addition: the live view now needs to render bounding box overlays on top of the video feed, not just a plain pass/fail badge. This is a pure frontend rendering task (drawing rectangles and labels on a <canvas> on top of the video), and does not change the browser-sandboxing reasoning from Revision 1 — the browser still never talks to the camera hardware protocol directly, it just draws shapes returned by the backend.
+4. Simple explanation (revised)
+4.1 English
+Picture a camera on a factory line that doesn't just say "good" or "bad" about a part — it draws a box around the exact scratch or dent it sees, tells you what kind of defect it is, and also recognizes which specific spare part is in front of it and tells you a bit about it. Beyond checking one part at a time, it also looks at a whole batch (a "set") of parts and tells you what percentage passed. And if a supervisor wants to know something like "how many parts failed yesterday," they can just type the question and get an answer, instead of digging through spreadsheets.
+4.2 Bahasa Indonesia
+Bayangkan sebuah kamera di lini produksi pabrik yang tidak hanya mengatakan "bagus" atau "cacat" pada suatu produk — kamera ini menggambar kotak di sekitar goresan atau penyok yang terlihat, memberi tahu jenis cacatnya, dan juga mengenali suku cadang spesifik apa yang ada di depannya beserta sedikit deskripsinya. Selain memeriksa satu produk pada satu waktu, sistem ini juga melihat satu batch ("set") produk secara keseluruhan dan memberi tahu berapa persen yang lolos. Dan jika supervisor ingin tahu sesuatu seperti "berapa banyak produk yang gagal kemarin," mereka cukup mengetik pertanyaannya dan mendapatkan jawaban, tanpa perlu mencari-cari di spreadsheet.
+5. Recommended technical solution (revised)
+Frontend: Next.js — unchanged from Revision 1, now with a canvas overlay for bounding boxes and a new chat UI component.
+Backend/API: FastAPI — unchanged.
+Object detection model: YOLOv8 (Ultralytics) fine-tuned on a bounding-box-annotated defect dataset — replaces the Revision 1 classifier.
+Part identification: reuse the same detector's class list if parts and defects can share one model, OR a second lightweight classifier if parts and defects need to be modeled separately (see Section 8.2 for the trade-off).
+Description generation: template-based text assembly from detected attributes (Section 11) rather than a trained generative model.
+Chatbot: an LLM API (e.g. the Anthropic API) given read-only database access through a small, fixed set of query functions — not a custom-trained language model (Section 12).
+Database: PostgreSQL or SQLite, extended with a sets table and defect-instance-level rows (Section 9).
+5.1 Why an LLM API instead of training a chatbot model
+Training a language model from scratch, or even fine-tuning one, is out of scope for any bootcamp timeline — this is not a scope cut specific to this project, it would be true of any 3-week team project. Calling an existing LLM API and giving it structured access to the database (a pattern often called "tool use" or "function calling") gets a working natural-language interface without any model training at all. The engineering work shifts from "train a model" to "design a small set of safe, read-only functions the LLM is allowed to call" — a much more tractable problem for the timeline, and arguably better software engineering practice besides.
+6. Features to implement (revised)
+6.1 Must-have (core MVP)
+Live view with bounding box overlay showing detected defects and their type.
+Automatic part/set identification for a small fixed catalog.
+Per-part OK/NG decision, driven by detected defects.
+Per-set OK/NG decision, driven by the pass percentage across parts inspected in that set.
+Results dashboard showing both part-level and set-level history.
+Chatbot answering a defined set of question types (see Section 12.3) about inspection history.
+6.2 Nice-to-have (if time allows)
+AI-generated part description shown alongside detection results.
+Fully open-ended chatbot question handling.
+Configurable pass-percentage threshold per set, rather than a fixed default.
+Multi-camera support, user authentication, report export (carried over from Revision 1's deferred list).
+7. Persona roles
+Unchanged from Revision 1: Configurator/Engineer sets up part profiles and thresholds; Operator/Viewer monitors results and now also uses the chatbot. The chatbot is scoped to this same single persona for the prototype — there is no separate "chatbot admin" role.
+8. AI tasking scope (revised)
+Revision 1 chose binary classification specifically because it needed the least labeled data and the simplest training pipeline. This revision commits to object detection instead, which is a real increase in requirements — this section makes that trade-off explicit rather than glossing over it.
+8.1 The four AI-related capabilities in this revision
+Capability
+What it does
+Approach
+Object detection
+Draws a bounding box around each defect and labels its type
+YOLOv8, fine-tuned on annotated defect data
+Part identification
+Recognizes which spare part / product set is in view
+Classification head on the same or a second model, over a small fixed part catalog
+Description generation
+Produces a short natural-language description of the identified part
+Template-based text assembly (Section 11) — not a trained generative model
+Inspection Q&A chatbot
+Answers natural-language questions about inspection history
+LLM API with read-only function-calling access to the database (Section 12)
+8.2 Should part identification be its own model, or reuse the defect detector?
+Two real options, worth deciding early since it changes how the dataset needs to be labeled:
+Option A — one detector, more classes: train the YOLO model to output classes like "bracket_scratch", "bracket_ok_region", "gear_crack", etc. — defect type and part type are entangled in one label. Simpler pipeline, but the class list grows fast (defect types × part types), and every new part type needs new labeled examples of every defect type on that part.
+Option B — two models: one detector purely for defects (scratch, crack, dent — part-agnostic), and one separate classifier purely for part identification (which part is this, regardless of defects). More moving parts, but each model needs less specialized data, and adding a new part type doesn't require re-labeling defect examples for it.
+Recommendation: Option B is more maintainable and closer in spirit to the "configuration-driven, not hardcoded" philosophy the rest of this project follows — swapping in a new part type becomes an addition to the part classifier's catalog, not a full defect-detector retrain. Option A is acceptable as a faster-to-build fallback if the timeline in Section 2.2 gets tight.
+9. Configurable schema (revised — "part profile" replaces manually-selected "template")
+In Revision 1, an operator manually picked a template before running an inspection. In this revision, the system identifies the part automatically and looks up its profile — the underlying idea (a lookup table decides behavior, not hardcoded logic) is unchanged, only the trigger for the lookup changes from a human clicking a dropdown to an automatic part-ID match.
+9.1 Part profile schema
+{
+  "part_profile_id": "part_0007",
+  "part_name": "Bracket X12",
+  "set_name": "Suspension Assembly Kit A",
+  "detection_model_id": "defect_detector_v1",
+  "part_id_model_id": "part_classifier_v1",
+  "known_defect_types": ["scratch", "crack", "dent"],
+  "decision_rule": {
+    "pass_label": "OK",
+    "fail_label": "NG",
+    "fail_if_any_defect_above_confidence": 0.80
+  },
+  "description_template": "This is a {part_name}, part of the {set_name}. {defect_summary}"
+}
+9.2 Per-part inspection result schema
+{
+  "inspection_id": "insp_004821",
+  "set_id": "set_001177",
+  "part_profile_id": "part_0007",
+  "part_identification": {
+    "part_name": "Bracket X12",
+    "set_name": "Suspension Assembly Kit A",
+    "confidence": 0.94
+  },
+  "description": "This is a Bracket X12, part of the Suspension Assembly Kit A. One scratch detected on the upper edge.",
+  "defects": [
+    {
+      "defect_type": "scratch",
+      "bbox": [124, 88, 212, 140],
+      "confidence": 0.91
+    }
+  ],
+  "part_result": "NG",
+  "timestamp": "2026-07-15T09:42:00Z"
+}
+The bbox field uses [x_min, y_min, x_max, y_max] pixel coordinates on the captured frame — this is what the frontend uses to draw the overlay rectangle (Section 15.1). Multiple defects on one part simply means multiple entries in the defects array; the set-level aggregation in Section 10 doesn't need to know that detail, it only needs part_result.
+9.3 Set aggregation schema
+{
+  "set_id": "set_001177",
+  "set_name": "Suspension Assembly Kit A",
+  "parts_inspected": 20,
+  "parts_passed": 18,
+  "parts_failed": 2,
+  "pass_percentage": 90.0,
+  "set_pass_threshold": 95.0,
+  "set_result": "NG"
+}
+10. Two-tier OK/NG logic
+This is mostly a data-modeling and backend-logic addition rather than a new AI task (see Section 2.1), which is why it's lower-risk than the other three new requirements.
+10.1 Per-part decision
+Unchanged in spirit from Revision 1's decision_rule: a part fails if any detected defect's confidence is above the configured threshold. The difference is that now there can be multiple defects per part (an array, not a single label), so the rule is applied per defect and the part fails if any one of them trips it.
+10.2 Per-set decision
+A set is a batch of parts inspected together (e.g. one full kit, or one shift's production run). The set-level pass percentage is a simple aggregation:
+pass_percentage = (parts_passed / parts_inspected) * 100
+ 
+set_result = "OK" if pass_percentage >= set_pass_threshold else "NG"
+A practical question worth deciding as a team before building this: does a set "close" only once every expected part has been inspected, or can a supervisor view a running/partial pass percentage mid-batch? The schema above supports both — parts_inspected can simply be less than the set's expected total while it's still in progress — but the frontend and chatbot behavior differ depending on which one your team picks, so it's worth a short discussion before Darrel builds the aggregation endpoint.
+11. AI-generated spare part description
+This is the requirement most likely to be over-scoped if taken literally as "the AI generates a description." It's worth reading this section before committing to an approach.
+11.1 Why a fully generative model is not realistic on this timeline
+A model that looks at an arbitrary image and writes a free-form sentence about it (image captioning, or a vision-language model) needs either a large amount of paired image/caption training data to train from scratch — unrealistic here — or an existing pretrained vision-language API, which introduces cost-per-call, latency, and the risk of the model describing something incorrectly (a hallucinated detail in a quality-inspection description is a real credibility problem, not just a cosmetic one).
+11.2 Recommended approach: template-based description
+Since the part identification step (Section 8) already knows exactly which part and set are in view, and the object detector already knows exactly which defects were found, a natural-language-sounding description can be assembled from a simple string template — no generative model needed:
+def generate_description(part_name, set_name, defects):
+    if not defects:
+        defect_summary = "No defects detected."
+    else:
+        types = ", ".join(d["defect_type"] for d in defects)
+        defect_summary = f"{len(defects)} defect(s) detected: {types}."
+ 
+    return (f"This is a {part_name}, part of the {set_name}. "
+            f"{defect_summary}")
+This satisfies the literal requirement — the system does generate a description automatically, and it reads naturally — without needing a trained generative model or an external API call per inspection. It is also fully explainable: every word in the output traces back to a specific detection result, which matters in a quality-inspection context where a wrong description undermines trust in the whole system.
+11.3 Stretch option, if time allows
+If the team has time after Phase 1 and 2 (Section 2.2), the template's defect_summary line could be passed through an LLM API purely to smooth the phrasing into a more natural sentence, while keeping the LLM strictly forbidden from inventing which defects exist — the facts still come from the template, only the wording is touched. This is a much smaller, safer use of a generative model than free-form image captioning.
+12. Inspection Data Q&A chatbot
+The chatbot lets the Operator/Configurator ask natural-language questions about inspection history and get answers pulled from the database already being populated by Sections 9 and 10 — no separate data pipeline needed, it reads the same tables the dashboard already writes to.
+12.1 Recommended architecture: function calling over a read-only query layer
+Rather than letting the LLM write and execute arbitrary SQL against the production database (a real security and correctness risk — a subtly wrong generated query can return misleading numbers with no obvious error), the recommended pattern is to give the LLM a small, fixed set of safe Python functions it can call, each doing one well-defined, read-only query:
+def get_set_pass_rate(set_id: str) -> dict:
+    """Returns pass/fail counts and percentage for one set."""
+    ...
+ 
+def get_recent_failures(part_name: str = None, limit: int = 10) -> list:
+    """Returns the most recent NG inspections, optionally filtered by part."""
+    ...
+ 
+def get_defect_type_frequency(start_date: str, end_date: str) -> dict:
+    """Returns a count of each defect type detected in a date range."""
+    ...
+The LLM's job becomes: read the operator's question, decide which of these functions (if any) answers it, call it, and phrase the returned data as a natural-language answer. This is dramatically safer than free-form SQL generation, and is also easier to test — each function can be unit-tested independently of the LLM.
+12.2 Example conversation
+Operator: "How many parts failed in set 001177?"
+ 
+-> LLM calls get_set_pass_rate(set_id="set_001177")
+-> Function returns: {parts_inspected: 20, parts_failed: 2, pass_percentage: 90.0}
+ 
+Chatbot: "Set 001177 had 2 failures out of 20 parts inspected, a 90% pass
+rate - just below the 95% threshold for that set."
+12.3 Recommended scope for the demo (Phase 3, Section 2.2)
+Rather than promising the chatbot can answer literally any question, define and test a small, known set of question types up front — this is both more honest and more achievable:
+Pass/fail rate for a given set
+Most recent failures, optionally filtered by part type
+Defect type frequency over a date range
+This turns "build a general chatbot" into "build three tested query functions and a thin LLM layer on top," which is a scoped, demoable Phase 3 deliverable rather than an open-ended one.
+12.4 A safety note worth taking seriously
+Even with function calling instead of free-form SQL, the LLM chooses which function to call and how to phrase the answer — it can still misinterpret a question or phrase a correct number misleadingly. For a quality-inspection tool, a wrong answer that sounds confident is worse than no answer at all. At minimum, the chatbot's answers should be treated as a convenience layer on top of the dashboard, not a replacement for it — the underlying numbers should always be checkable by clicking through to the actual results table.
+13. System architecture (revised)
+Two new components compared to Revision 1:
+AI Vision Engine — now handles detection, part identification, and description generation together (or via two internally-composed models, per Section 8.2 — the API layer doesn't need to know which).
+Chatbot Service — a separate backend service, called by the API layer, which itself queries the same Database that the AI Vision Engine writes to.
+13.1 Step-by-step walkthrough of one inspection
+1. The operator opens the dashboard and the live camera view.
+2. The frontend captures a frame and sends it to the API layer.
+3. The API layer forwards the frame to the AI Vision Engine.
+4. The AI Vision Engine identifies the part/set, detects defects with bounding boxes, and assembles the description.
+5. The API layer applies the per-part decision rule from that part's profile, and saves the result to the database.
+6. The frontend draws the returned bounding boxes over the live view and displays the description and per-part result.
+7. Once a set's expected parts have all been inspected (or on demand), the backend recomputes that set's pass percentage and set-level result.
+8. Separately, at any time, the operator can ask the chatbot a question, which calls the Chatbot Service, which queries the database and returns a natural-language answer.
+14. Project folder structure (revised)
+camera-ai-project/
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── routers/
+│   │   │   ├── inspections.py       (per-part results)
+│   │   │   ├── sets.py              (NEW - set aggregation)
+│   │   │   └── chatbot.py           (NEW - Q&A endpoint)
+│   │   ├── services/
+│   │   │   ├── vision_engine.py      (NEW - detection + part ID + description)
+│   │   │   ├── description_generator.py (NEW - Section 11 template logic)
+│   │   │   └── chatbot_service.py    (NEW - Section 12 function-calling logic)
+│   │   └── schemas/
+│   │       ├── part_profile_schema.py (renamed from template_schema.py)
+│   │       └── set_schema.py          (NEW)
+│   └── ai_models/
+│       ├── defect_detector_v1.pt      (YOLOv8 weights)
+│       └── part_classifier_v1.pt
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── BoundingBoxOverlay.jsx (NEW)
+│       │   └── ChatPanel.jsx           (NEW)
+│       └── pages/
+│           └── dashboard.js
+└── docs/
+15. Camera integration (revised — drawing detection results)
+The capture-and-send mechanism from Revision 1 (Section 12 of that document) is unchanged. What's new is that the backend now returns bounding boxes instead of a single label, so the frontend needs to draw them.
+15.1 Frontend: drawing bounding boxes on the live view
+function drawDetections(canvasCtx, detections, videoWidth, videoHeight) {
+  canvasCtx.clearRect(0, 0, videoWidth, videoHeight);
+ 
+  detections.forEach((d) => {
+    const [x1, y1, x2, y2] = d.bbox;
+    canvasCtx.strokeStyle = "#C1563A";
+    canvasCtx.lineWidth = 2;
+    canvasCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+ 
+    canvasCtx.fillStyle = "#C1563A";
+    canvasCtx.font = "14px sans-serif";
+    canvasCtx.fillText(
+      `${d.defect_type} (${Math.round(d.confidence * 100)}%)`,
+      x1, y1 - 6
+    );
+  });
+}
+15.2 Backend: returning detection results
+The inspection endpoint's response shape now matches the per-part schema from Section 9.2 — the frontend receives the full defects array (each with a bbox and defect_type) instead of a single label, and calls drawDetections() with it once the response arrives.
+16. Note on the Jira sprint plan
+The sprint plan and task breakdown in the earlier Jira planning document was built around Revision 1's scope. Given the scope increase described in Section 2, that plan should be revisited as a team before continuing to work from it as-is — particularly Epic 3 (AI Model Development), which now needs to cover object detection, part identification, and the chatbot instead of a single classifier. This document deliberately doesn't redo that breakdown here, since the phasing decision in Section 2.2 needs to happen first and should be a team discussion, not a unilateral rewrite.

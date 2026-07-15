@@ -1,0 +1,112 @@
+[
+  {
+    "template_id": "tmpl_0001",
+    "template_name": "Bracket Scratch Inspection",
+    "description": "Detects surface scratches on metal brackets using binary classification.",
+    "input_source": {
+      "type": "webcam",
+      "device_id": 0
+    },
+    "preprocessing_steps": [
+      { "step_type": "resize", "params": { "width": 224, "height": 224 } },
+      { "step_type": "normalize", "params": { "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225] } }
+    ],
+    "inspection_step": {
+      "step_type": "classification",
+      "model_id": "model_scratch_v1",
+      "confidence_threshold": 0.80
+    },
+    "decision_rule": {
+      "pass_label": "OK",
+      "fail_label": "NG",
+      "min_confidence_to_pass": 0.80
+    },
+    "output_actions": [
+      { "action_type": "save_result", "params": { "store_image": true } },
+      { "action_type": "log_event", "params": { "log_level": "info" } }
+    ]
+  },
+  {
+    "template_id": "tmpl_0002",
+    "template_name": "Weld Quality Check",
+    "description": "Inspects weld bead quality for porosity, undercut, and spatter defects.",
+    "input_source": {
+      "type": "webcam",
+      "device_id": 1
+    },
+    "preprocessing_steps": [
+      { "step_type": "crop", "params": { "x": 30, "y": 30, "width": 380, "height": 380 } },
+      { "step_type": "resize", "params": { "width": 224, "height": 224 } },
+      { "step_type": "normalize", "params": { "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225] } }
+    ],
+    "inspection_step": {
+      "step_type": "classification",
+      "model_id": "model_weld_v1",
+      "confidence_threshold": 0.85
+    },
+    "decision_rule": {
+      "pass_label": "OK",
+      "fail_label": "NG",
+      "min_confidence_to_pass": 0.85
+    },
+    "output_actions": [
+      { "action_type": "save_result", "params": { "store_image": true } },
+      { "action_type": "log_event", "params": { "log_level": "info" } },
+      { "action_type": "trigger_alert", "params": { "on": "fail" } }
+    ]
+  },
+  {
+    "template_id": "tmpl_0003",
+    "template_name": "Paint Defect Detection",
+    "description": "Identifies paint bubbles, runs, and uneven coating on finished parts.",
+    "input_source": {
+      "type": "image_upload",
+      "device_id": null
+    },
+    "preprocessing_steps": [
+      { "step_type": "resize", "params": { "width": 224, "height": 224 } },
+      { "step_type": "normalize", "params": { "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225] } }
+    ],
+    "inspection_step": {
+      "step_type": "classification",
+      "model_id": "model_paint_v1",
+      "confidence_threshold": 0.75
+    },
+    "decision_rule": {
+      "pass_label": "OK",
+      "fail_label": "NG",
+      "min_confidence_to_pass": 0.75
+    },
+    "output_actions": [
+      { "action_type": "save_result", "params": { "store_image": true } }
+    ]
+  },
+  {
+    "template_id": "tmpl_0004",
+    "template_name": "Assembly Completeness Check",
+    "description": "Verifies all components are present and correctly positioned in assembly.",
+    "input_source": {
+      "type": "webcam",
+      "device_id": 0
+    },
+    "preprocessing_steps": [
+      { "step_type": "resize", "params": { "width": 224, "height": 224 } },
+      { "step_type": "normalize", "params": { "mean": [0.485, 0.456, 0.406], "std": [0.229, 0.224, 0.225] } }
+    ],
+    "inspection_step": {
+      "step_type": "classification",
+      "model_id": "model_assembly_v1",
+      "confidence_threshold": 0.90
+    },
+    "decision_rule": {
+      "pass_label": "OK",
+      "fail_label": "NG",
+      "min_confidence_to_pass": 0.90
+    },
+    "output_actions": [
+      { "action_type": "save_result", "params": { "store_image": true } },
+      { "action_type": "log_event", "params": { "log_level": "warning" } },
+      { "action_type": "trigger_alert", "params": { "on": "fail" } }
+    ]
+  }
+]

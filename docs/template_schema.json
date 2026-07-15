@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Camera AI Inspection Template",
+  "description": "Defines a configurable inspection workflow. The backend reads this JSON and executes each step dynamically — no per-customer code needed.",
+  "type": "object",
+  "required": [
+    "template_id",
+    "template_name",
+    "description",
+    "input_source",
+    "preprocessing_steps",
+    "inspection_step",
+    "decision_rule",
+    "output_actions"
+  ],
+  "properties": {
+    "template_id": {
+      "type": "string",
+      "pattern": "^tmpl_[0-9]{4}$",
+      "description": "Unique identifier for this template (e.g. tmpl_0001)."
+    },
+    "template_name": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 100,
+      "description": "Human-readable name shown in the dashboard."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Brief explanation of what this inspection checks."
+    },
+    "input_source": {
+      "type": "object",
+      "description": "Where the image comes from.",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["webcam", "image_upload"],
+          "description": "webcam = live camera via getUserMedia; image_upload = file upload."
+        },
+        "device_id": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": 0,
+          "description": "Camera index (0 = default). Only used when type = webcam."
+        }
+      }
+    },
+    "preprocessing_steps": {
+      "type": "array",
+      "description": "Ordered list of image transformations applied before AI inference. The backend loops through these generically.",
+      "items": {
+        "type": "object",
+        "required": ["step_type", "params"],
+        "properties": {
+          "step_type": {
+            "type": "string",
+            "enum": ["resize", "crop", "normalize"],
+            "description": "Type of preprocessing operation."
+          },
+          "params": {
+            "type": "object",
+            "description": "Parameters specific to the step type.",
+            "oneOf": [
+              {
+                "title": "Resize Parameters",
+                "properties": {
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Target width in pixels."
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Target height in pixels."
+                  }
+                },
+                "required": ["width", "height"]
+              },
+              {
+                "title": "Crop Parameters",
+                "properties": {
+                  "x": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Crop start X coordinate."
+                  },
+                  "y": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Crop start Y coordinate."
+                  },
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Crop region width."
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Crop region height."
+                  }
+                },
+                "required": ["x", "y", "width", "height"]
+              },
+              {
+                "title": "Normalize Parameters",
+                "properties": {
+                  "mean": {
+                    "type": "array",
+                    "items": { "type": "number" },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "Channel-wise mean values [R, G, B]."
+                  },
+                  "std": {
+                    "type": "array",
+                    "items": { "type": "number" },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "Channel-wise std deviation values [R, G, B]."
+                  }
+                },
+                "required": ["mean", "std"]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "inspection_step": {
+      "type": "object",
+      "description": "The AI inference step — which model to use and at what confidence.",
+      "required": ["step_type", "model_id", "confidence_threshold"],
+      "properties": {
+        "step_type": {
+          "type": "string",
+          "enum": ["classification"],
+          "description": "Type of AI task. Currently only 'classification' (OK/NG). Extensible to 'detection', 'segmentation', etc."
+        },
+        "model_id": {
+          "type": "string",
+          "description": "References a trained model file in ai_models/ directory."
+        },
+        "confidence_threshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Minimum confidence score to consider the prediction valid."
+        }
+      }
+    },
+    "decision_rule": {
+      "type": "object",
+      "description": "Converts the AI's raw confidence into a business pass/fail decision. Separates AI output from business logic — different customers can use different thresholds without retraining.",
+      "required": ["pass_label", "fail_label", "min_confidence_to_pass"],
+      "properties": {
+        "pass_label": {
+          "type": "string",
+          "default": "OK",
+          "description": "Label assigned when the part passes inspection."
+        },
+        "fail_label": {
+          "type": "string",
+          "default": "NG",
+          "description": "Label assigned when the part fails inspection."
+        },
+        "min_confidence_to_pass": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "If confidence >= this value, result = pass_label. Otherwise, result = fail_label."
+        }
+      }
+    },
+    "output_actions": {
+      "type": "array",
+      "description": "Actions executed after the decision is made. The backend loops through these generically.",
+      "items": {
+        "type": "object",
+        "required": ["action_type", "params"],
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "enum": ["save_result", "log_event", "trigger_alert"],
+            "description": "Type of output action."
+          },
+          "params": {
+            "type": "object",
+            "description": "Parameters specific to the action type.",
+            "properties": {
+              "store_image": {
+                "type": "boolean",
+                "description": "Whether to store the inspected image alongside the result. Used with save_result."
+              },
+              "log_level": {
+                "type": "string",
+                "enum": ["info", "warning", "error"],
+                "description": "Severity level for the log entry. Used with log_event."
+              },
+              "on": {
+                "type": "string",
+                "enum": ["fail", "always"],
+                "description": "When to trigger the alert. Used with trigger_alert."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
