@@ -191,3 +191,8 @@ export function getResultsExportUrl(verdict = null) {
 export async function fetchAlerts() {
   return apiGet('/api/alerts/');
 }
+
+// ─── Chatbot ──────────────────────────────────────
+export async function sendChatMessage(message) {
+  return apiPost('/api/chat/', { message });
+}

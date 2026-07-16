@@ -6,6 +6,7 @@ import {AuthProvider, useAuth} from "@/lib/AuthContext";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import FloatingAlertBadge from "@/components/FloatingAlertBadge";
+import FloatingChatbot from "@/components/FloatingChatbot";
 import "./globals.css";
 import {useEffect} from "react";
 
@@ -48,6 +49,7 @@ function AppShell({children}) {
           {children}
         </main>
       </div>
+      <FloatingChatbot />
       <FloatingAlertBadge />
     </div>
   );
