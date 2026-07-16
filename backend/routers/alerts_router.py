@@ -152,12 +152,13 @@ def get_alerts(db: Session = Depends(get_db), user: models.User = Depends(get_cu
                         "This may indicate changes in lighting, camera angle, or production materials. "
                         "Capture new images and retrain to restore accuracy."
                     ),
-                    "action_label": "Go to Training",
-                    "action_url": "/training",
                     "created_at": now.isoformat(),
                     "icon": "trending-down",
                     "model_name": m.name,
                 }
+                if user.role == "admin":
+                    alert_data["action_label"] = "Go to Training"
+                    alert_data["action_url"] = "/training"
                 alerts.append(alert_data)
                 model_alerts_for_summary.append(alert_data)
 
@@ -235,7 +236,7 @@ def get_alerts(db: Session = Depends(get_db), user: models.User = Depends(get_cu
     for job in recently_trained:
         model_obj = db.query(models.TrainedModel).filter(models.TrainedModel.id == job.model_id).first()
         if model_obj:
-            alerts.append({
+            alert = {
                 "id": f"trained_{job.id}",
                 "severity": "info",
                 "title": f"Model Training Completed: {model_obj.name}",
@@ -243,11 +244,13 @@ def get_alerts(db: Session = Depends(get_db), user: models.User = Depends(get_cu
                     f"Model '{model_obj.name} v{model_obj.version}' has finished training successfully. "
                     "Review its evaluation metrics and deploy it for live inspection."
                 ),
-                "action_label": "View Model",
-                "action_url": "/models",
                 "created_at": job.completed_at.isoformat() if job.completed_at else now.isoformat(),
                 "icon": "check-circle",
-            })
+            }
+            if user.role == "admin":
+                alert["action_label"] = "View Model"
+                alert["action_url"] = "/models"
+            alerts.append(alert)
 
     # ── Sort: Critical first, then Warning, then Info ─────────────────────────
     severity_order = {"critical": 0, "warning": 1, "info": 2}

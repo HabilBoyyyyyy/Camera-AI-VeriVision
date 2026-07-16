@@ -175,16 +175,38 @@ export async function fetchInspectionModels() {
 }
 
 // ─── Results ──────────────────────────────────────
-export async function fetchResults(page = 1, limit = 20, verdict = null) {
-  let url = `/api/results?page=${page}&limit=${limit}`;
-  if (verdict) url += `&verdict=${verdict}`;
-  return apiGet(url);
+export async function fetchResults(page = 1, limit = 20, filters = {}) {
+  const params = new URLSearchParams();
+  params.append("page", page);
+  params.append("limit", limit);
+  
+  if (filters.verdict) params.append("verdict", filters.verdict);
+  if (filters.model_id) params.append("model_id", filters.model_id);
+  if (filters.start_date) params.append("start_date", filters.start_date);
+  if (filters.end_date) params.append("end_date", filters.end_date);
+  if (filters.min_conf !== undefined && filters.min_conf !== "") params.append("min_conf", filters.min_conf);
+  if (filters.max_conf !== undefined && filters.max_conf !== "") params.append("max_conf", filters.max_conf);
+  if (filters.search_id) params.append("search_id", filters.search_id);
+
+  return apiGet(`/api/results?${params.toString()}`);
 }
 
-export function getResultsExportUrl(verdict = null) {
-  let url = `${BASE_URL}/api/results/export`;
-  if (verdict) url += `?verdict=${verdict}`;
-  return url;
+export function getResultsExportUrl(filters = {}) {
+  const params = new URLSearchParams();
+  
+  if (filters.verdict) params.append("verdict", filters.verdict);
+  if (filters.model_id) params.append("model_id", filters.model_id);
+  if (filters.start_date) params.append("start_date", filters.start_date);
+  if (filters.end_date) params.append("end_date", filters.end_date);
+  if (filters.min_conf !== undefined && filters.min_conf !== "") params.append("min_conf", filters.min_conf);
+  if (filters.max_conf !== undefined && filters.max_conf !== "") params.append("max_conf", filters.max_conf);
+  if (filters.search_id) params.append("search_id", filters.search_id);
+
+  return `${BASE_URL}/api/results/export${params.toString() ? '?' + params.toString() : ''}`;
+}
+
+export async function deleteResult(id) {
+  return apiDelete(`/api/results/${id}`);
 }
 
 // ─── Alerts ───────────────────────────────────────

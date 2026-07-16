@@ -52,6 +52,7 @@ const adminNavItems = [
 ];
 
 const inspectorNavItems = [
+  {href: "/", label: "Dashboard", icon: (cls) => <GridIcon className={cls} />},
   {
     href: "/live",
     label: "Live Inspection",
