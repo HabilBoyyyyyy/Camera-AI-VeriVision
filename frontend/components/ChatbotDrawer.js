@@ -1,17 +1,25 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPaperPlane, faRobot, faTimes } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {
+  faPaperPlane,
+  faRobot,
+  faTimes,
+} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useRef, useEffect} from "react";
 import {simulateChatResponse} from "@/lib/api";
 
-function XIcon(p) { return <FontAwesomeIcon icon={faTimes} className={p.className || ''} /> ; }
+function XIcon(p) {
+  return <FontAwesomeIcon icon={faTimes} className={p.className || ""} />;
+}
 
-function SendIcon(p) { return <FontAwesomeIcon icon={faPaperPlane} className={p.className || ''} /> ; }
+function SendIcon(p) {
+  return <FontAwesomeIcon icon={faPaperPlane} className={p.className || ""} />;
+}
 
-function BotIcon(p) { return <FontAwesomeIcon icon={faRobot} className={p.className || ''} /> ; }
+function BotIcon(p) {
+  return <FontAwesomeIcon icon={faRobot} className={p.className || ""} />;
+}
 
 // Simple markdown-like parser for the chatbot messages
 function parseMessage(content) {

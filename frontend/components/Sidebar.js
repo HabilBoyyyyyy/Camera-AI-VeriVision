@@ -1,21 +1,52 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCamera, faCube, faDatabase, faList, faMicrochip, faShieldAlt, faThLarge, faTimes, faBell, faSignOutAlt } from '@fortawesome/free-solid-svg-icons';
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {
+  faCamera,
+  faCube,
+  faDatabase,
+  faList,
+  faMicrochip,
+  faShieldAlt,
+  faThLarge,
+  faTimes,
+  faBell,
+  faSignOutAlt,
+} from "@fortawesome/free-solid-svg-icons";
 
 import Link from "next/link";
 import {usePathname} from "next/navigation";
 import {useAuth} from "@/lib/AuthContext";
 
-function ShieldEyeIcon(p) { return <FontAwesomeIcon icon={faShieldAlt} className={p.className || ''} /> ; }
-function GridIcon(p) { return <FontAwesomeIcon icon={faThLarge} className={p.className || ''} /> ; }
-function DatabaseIcon(p) { return <FontAwesomeIcon icon={faDatabase} className={p.className || ''} /> ; }
-function CpuIcon(p) { return <FontAwesomeIcon icon={faMicrochip} className={p.className || ''} /> ; }
-function CubeIcon(p) { return <FontAwesomeIcon icon={faCube} className={p.className || ''} /> ; }
-function CameraIcon(p) { return <FontAwesomeIcon icon={faCamera} className={p.className || ''} /> ; }
-function ListIcon(p) { return <FontAwesomeIcon icon={faList} className={p.className || ''} /> ; }
-function XIcon(p) { return <FontAwesomeIcon icon={faTimes} className={p.className || ''} /> ; }
-function LogOutIcon(p) { return <FontAwesomeIcon icon={faSignOutAlt} className={p.className || ''} /> ; }
-function BellIcon(p) { return <FontAwesomeIcon icon={faBell} className={p.className || ''} /> ; }
+function ShieldEyeIcon(p) {
+  return <FontAwesomeIcon icon={faShieldAlt} className={p.className || ""} />;
+}
+function GridIcon(p) {
+  return <FontAwesomeIcon icon={faThLarge} className={p.className || ""} />;
+}
+function DatabaseIcon(p) {
+  return <FontAwesomeIcon icon={faDatabase} className={p.className || ""} />;
+}
+function CpuIcon(p) {
+  return <FontAwesomeIcon icon={faMicrochip} className={p.className || ""} />;
+}
+function CubeIcon(p) {
+  return <FontAwesomeIcon icon={faCube} className={p.className || ""} />;
+}
+function CameraIcon(p) {
+  return <FontAwesomeIcon icon={faCamera} className={p.className || ""} />;
+}
+function ListIcon(p) {
+  return <FontAwesomeIcon icon={faList} className={p.className || ""} />;
+}
+function XIcon(p) {
+  return <FontAwesomeIcon icon={faTimes} className={p.className || ""} />;
+}
+function LogOutIcon(p) {
+  return <FontAwesomeIcon icon={faSignOutAlt} className={p.className || ""} />;
+}
+function BellIcon(p) {
+  return <FontAwesomeIcon icon={faBell} className={p.className || ""} />;
+}
 
 const adminNavItems = [
   {href: "/", label: "Dashboard", icon: (cls) => <GridIcon className={cls} />},

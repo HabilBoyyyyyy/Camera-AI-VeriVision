@@ -1,23 +1,58 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowRight, faBell, faChartLine, faCheckCircle, faExclamationTriangle, faFire, faQuestionCircle, faSync, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {
+  faArrowRight,
+  faBell,
+  faChartLine,
+  faCheckCircle,
+  faExclamationTriangle,
+  faFire,
+  faQuestionCircle,
+  faSync,
+  faWandMagicSparkles,
+} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect} from "react";
 import Link from "next/link";
 import {fetchAlerts} from "@/lib/api";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
-function BellIcon(p) { return <FontAwesomeIcon icon={faBell} className={p.className || ''} /> ; }
-function FlameIcon(p) { return <FontAwesomeIcon icon={faFire} className={p.className || ''} /> ; }
-function AlertTriangleIcon(p) { return <FontAwesomeIcon icon={faExclamationTriangle} className={p.className || ''} /> ; }
-function HelpCircleIcon(p) { return <FontAwesomeIcon icon={faQuestionCircle} className={p.className || ''} /> ; }
-function CheckCircleIcon(p) { return <FontAwesomeIcon icon={faCheckCircle} className={p.className || ''} /> ; }
-function TrendingDownIcon(p) { return <FontAwesomeIcon icon={faChartLine} className={p.className || ''} /> ; }
-function ArrowRightIcon(p) { return <FontAwesomeIcon icon={faArrowRight} className={p.className || ''} /> ; }
-function SparkleIcon(p) { return <FontAwesomeIcon icon={faWandMagicSparkles} className={p.className || ''} /> ; }
-function RefreshIcon(p) { return <FontAwesomeIcon icon={faSync} className={p.className || ''} /> ; }
+function BellIcon(p) {
+  return <FontAwesomeIcon icon={faBell} className={p.className || ""} />;
+}
+function FlameIcon(p) {
+  return <FontAwesomeIcon icon={faFire} className={p.className || ""} />;
+}
+function AlertTriangleIcon(p) {
+  return (
+    <FontAwesomeIcon
+      icon={faExclamationTriangle}
+      className={p.className || ""}
+    />
+  );
+}
+function HelpCircleIcon(p) {
+  return (
+    <FontAwesomeIcon icon={faQuestionCircle} className={p.className || ""} />
+  );
+}
+function CheckCircleIcon(p) {
+  return <FontAwesomeIcon icon={faCheckCircle} className={p.className || ""} />;
+}
+function TrendingDownIcon(p) {
+  return <FontAwesomeIcon icon={faChartLine} className={p.className || ""} />;
+}
+function ArrowRightIcon(p) {
+  return <FontAwesomeIcon icon={faArrowRight} className={p.className || ""} />;
+}
+function SparkleIcon(p) {
+  return (
+    <FontAwesomeIcon icon={faWandMagicSparkles} className={p.className || ""} />
+  );
+}
+function RefreshIcon(p) {
+  return <FontAwesomeIcon icon={faSync} className={p.className || ""} />;
+}
 
 // ── Severity config ───────────────────────────────────────────────────────────
 const SEVERITY = {

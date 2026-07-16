@@ -1,8 +1,6 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMicrochip } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {faMicrochip} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect, useRef} from "react";
 import {getTrainingStatus, getTrainingHistory} from "@/lib/api";
@@ -16,7 +14,9 @@ import {
   CartesianGrid,
 } from "recharts";
 
-function CpuIcon(p) { return <FontAwesomeIcon icon={faMicrochip} className={p.className || ''} /> ; }
+function CpuIcon(p) {
+  return <FontAwesomeIcon icon={faMicrochip} className={p.className || ""} />;
+}
 
 export default function TrainingMonitor({
   initialJobId = null,

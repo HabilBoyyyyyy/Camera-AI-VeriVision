@@ -1,8 +1,6 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMicrochip, faPlay } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {faMicrochip, faPlay} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect} from "react";
 import {
@@ -13,8 +11,12 @@ import {
 } from "@/lib/api";
 import TrainingMonitor from "@/components/TrainingMonitor";
 
-function CpuIcon(p) { return <FontAwesomeIcon icon={faMicrochip} className={p.className || ''} /> ; }
-function PlayIcon(p) { return <FontAwesomeIcon icon={faPlay} className={p.className || ''} /> ; }
+function CpuIcon(p) {
+  return <FontAwesomeIcon icon={faMicrochip} className={p.className || ""} />;
+}
+function PlayIcon(p) {
+  return <FontAwesomeIcon icon={faPlay} className={p.className || ""} />;
+}
 function ClockIcon(p) {
   return (
     <svg

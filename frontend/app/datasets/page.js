@@ -1,20 +1,45 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faChevronDown, faDatabase, faExclamationTriangle, faFolder, faTrash, faUpload } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {
+  faCheck,
+  faChevronDown,
+  faDatabase,
+  faExclamationTriangle,
+  faFolder,
+  faTrash,
+  faUpload,
+} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect, useRef} from "react";
 import {fetchDatasets, uploadDataset, deleteDataset} from "@/lib/api";
 import DatasetExplorer from "@/components/DatasetExplorer";
 
-function UploadIcon(p) { return <FontAwesomeIcon icon={faUpload} className={p.className || ''} /> ; }
-function DatabaseIcon(p) { return <FontAwesomeIcon icon={faDatabase} className={p.className || ''} /> ; }
-function TrashIcon(p) { return <FontAwesomeIcon icon={faTrash} className={p.className || ''} /> ; }
-function CheckIcon(p) { return <FontAwesomeIcon icon={faCheck} className={p.className || ''} /> ; }
-function AlertIcon(p) { return <FontAwesomeIcon icon={faExclamationTriangle} className={p.className || ''} /> ; }
-function ChevronIcon(p) { return <FontAwesomeIcon icon={faChevronDown} className={p.className || ''} /> ; }
-function FolderIcon(p) { return <FontAwesomeIcon icon={faFolder} className={p.className || ''} /> ; }
+function UploadIcon(p) {
+  return <FontAwesomeIcon icon={faUpload} className={p.className || ""} />;
+}
+function DatabaseIcon(p) {
+  return <FontAwesomeIcon icon={faDatabase} className={p.className || ""} />;
+}
+function TrashIcon(p) {
+  return <FontAwesomeIcon icon={faTrash} className={p.className || ""} />;
+}
+function CheckIcon(p) {
+  return <FontAwesomeIcon icon={faCheck} className={p.className || ""} />;
+}
+function AlertIcon(p) {
+  return (
+    <FontAwesomeIcon
+      icon={faExclamationTriangle}
+      className={p.className || ""}
+    />
+  );
+}
+function ChevronIcon(p) {
+  return <FontAwesomeIcon icon={faChevronDown} className={p.className || ""} />;
+}
+function FolderIcon(p) {
+  return <FontAwesomeIcon icon={faFolder} className={p.className || ""} />;
+}
 
 export default function DatasetsPage() {
   const [datasets, setDatasets] = useState([]);

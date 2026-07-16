@@ -1,6 +1,6 @@
 "use client";
 
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
 import {
   faPaperPlane,
   faRobot,
@@ -9,8 +9,8 @@ import {
   faGripVertical,
 } from "@fortawesome/free-solid-svg-icons";
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { sendChatMessage } from "@/lib/api";
+import {useState, useRef, useEffect, useCallback} from "react";
+import {sendChatMessage} from "@/lib/api";
 
 // ── Markdown-like parser for bot messages ──────────────────────────────────
 function parseMessage(content) {
@@ -25,8 +25,7 @@ function parseMessage(content) {
       result.push(
         <div
           className="overflow-x-auto w-full my-2"
-          key={`table-${result.length}`}
-        >
+          key={`table-${result.length}`}>
           <table className="chat-markdown w-full text-sm">
             {tableHeaders.length > 0 && (
               <thead>
@@ -41,8 +40,7 @@ function parseMessage(content) {
               {tableRows.map((row, i) => (
                 <tr
                   key={i}
-                  className="border-b border-[#2b313a] hover:bg-[#1e232a]"
-                >
+                  className="border-b border-[#2b313a] hover:bg-[#1e232a]">
                   {row.map((cell, j) => (
                     <td key={j}>{cell}</td>
                   ))}
@@ -50,7 +48,7 @@ function parseMessage(content) {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>,
       );
     }
     inTable = false;
@@ -100,13 +98,13 @@ function parseMessage(content) {
         result.push(
           <li key={`li-${index}`} className="ml-4 list-disc mb-1">
             {parseInline(line.trim().substring(2))}
-          </li>
+          </li>,
         );
       } else {
         result.push(
           <p key={`p-${index}`} className="mb-2 leading-relaxed">
             {parseInline(line)}
-          </p>
+          </p>,
         );
       }
     }
@@ -133,10 +131,10 @@ export default function FloatingChatbot() {
   const scrollRef = useRef(null);
 
   // ── Drag state ─────────────────────────────────────────────────────────
-  const [btnPos, setBtnPos] = useState({ bottom: 88, right: 24 });
+  const [btnPos, setBtnPos] = useState({bottom: 88, right: 24});
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef(null);
-  const dragStartRef = useRef({ x: 0, y: 0, bottom: 0, right: 0 });
+  const dragStartRef = useRef({x: 0, y: 0, bottom: 0, right: 0});
 
   const onPointerDown = useCallback(
     (e) => {
@@ -151,7 +149,7 @@ export default function FloatingChatbot() {
       };
       dragRef.current?.setPointerCapture(e.pointerId);
     },
-    [btnPos, isOpen]
+    [btnPos, isOpen],
   );
 
   const onPointerMove = useCallback(
@@ -164,7 +162,7 @@ export default function FloatingChatbot() {
         right: Math.max(8, dragStartRef.current.right - dx),
       });
     },
-    [dragging]
+    [dragging],
   );
 
   const onPointerUp = useCallback(
@@ -180,7 +178,7 @@ export default function FloatingChatbot() {
         setIsOpen(true);
       }
     },
-    [dragging]
+    [dragging],
   );
 
   // Auto-scroll to bottom
@@ -236,13 +234,11 @@ export default function FloatingChatbot() {
           style={{
             bottom: `${btnPos.bottom}px`,
             right: `${btnPos.right}px`,
-          }}
-        >
+          }}>
           <div
             className={`relative flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-[#f5a623] to-[#e8941a] shadow-[0_4px_20px_rgba(245,166,35,0.4)] hover:shadow-[0_4px_28px_rgba(245,166,35,0.6)] hover:scale-110 transition-all duration-300 ${
               dragging ? "cursor-grabbing scale-105" : "cursor-pointer"
-            }`}
-          >
+            }`}>
             <FontAwesomeIcon
               icon={faCommentDots}
               className="w-6 h-6 text-[#14171c]"
@@ -262,8 +258,7 @@ export default function FloatingChatbot() {
       {isOpen && (
         <div
           className="fixed z-50 bottom-6 right-6 w-[380px] max-w-[calc(100vw-32px)] h-[520px] max-h-[calc(100vh-48px)] bg-[#181c22] border border-[#2b313a] rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden animate-fade-in"
-          style={{ animationDuration: "0.2s" }}
-        >
+          style={{animationDuration: "0.2s"}}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#2b313a] bg-[#181c22] rounded-t-2xl shrink-0">
             <div className="flex items-center gap-3">
@@ -288,8 +283,7 @@ export default function FloatingChatbot() {
             <button
               onClick={() => setIsOpen(false)}
               className="p-1.5 rounded-lg text-[#5a6270] hover:text-[#dbe0e6] hover:bg-[#232830] transition-colors"
-              title="Minimize"
-            >
+              title="Minimize">
               <FontAwesomeIcon icon={faTimes} className="w-4 h-4" />
             </button>
           </div>
@@ -297,8 +291,7 @@ export default function FloatingChatbot() {
           {/* Message Area */}
           <div
             ref={scrollRef}
-            className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
-          >
+            className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
             {messages.map((msg) => {
               const isUser = msg.role === "user";
               return (
@@ -306,15 +299,13 @@ export default function FloatingChatbot() {
                   key={msg.id}
                   className={`flex gap-3 max-w-[90%] chat-bubble ${
                     isUser ? "ml-auto flex-row-reverse" : "mr-auto"
-                  }`}
-                >
+                  }`}>
                   <div
                     className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${
                       isUser
                         ? "bg-[#7a8ba8] text-[#14171c]"
                         : "bg-[#1a1e24] border border-[#2b313a]"
-                    }`}
-                  >
+                    }`}>
                     {isUser ? (
                       "You"
                     ) : (
@@ -329,8 +320,7 @@ export default function FloatingChatbot() {
                       isUser
                         ? "bg-[#f5a623] text-[#14171c] rounded-tr-sm font-medium"
                         : "bg-[#1a1e24] text-[#8a93a3] border border-[#2b313a] rounded-tl-sm"
-                    }`}
-                  >
+                    }`}>
                     {isUser ? (
                       <p>{msg.content}</p>
                     ) : (
@@ -367,8 +357,7 @@ export default function FloatingChatbot() {
           <div className="p-3 bg-[#181c22] border-t border-[#2b313a] shrink-0 rounded-b-2xl">
             <form
               onSubmit={handleSend}
-              className="flex items-center gap-2 bg-[#0f1216] border border-[#2b313a] rounded-xl px-3 py-1.5 focus-within:border-[#f5a623]/60 focus-within:ring-1 focus-within:ring-[#f5a623]/25 transition-all shadow-inner"
-            >
+              className="flex items-center gap-2 bg-[#0f1216] border border-[#2b313a] rounded-xl px-3 py-1.5 focus-within:border-[#f5a623]/60 focus-within:ring-1 focus-within:ring-[#f5a623]/25 transition-all shadow-inner">
               <input
                 type="text"
                 value={input}
@@ -383,8 +372,7 @@ export default function FloatingChatbot() {
                   input.trim() && !isTyping
                     ? "bg-[#f5a623] text-[#14171c] hover:bg-[#ffb63f]"
                     : "bg-[#232830] text-[#3a4149] cursor-not-allowed"
-                }`}
-              >
+                }`}>
                 <FontAwesomeIcon icon={faPaperPlane} className="w-3.5 h-3.5" />
               </button>
             </form>

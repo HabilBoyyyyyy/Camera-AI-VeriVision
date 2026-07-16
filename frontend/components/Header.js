@@ -1,12 +1,12 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBars } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {faBars} from "@fortawesome/free-solid-svg-icons";
 
 import {useAuth} from "@/lib/AuthContext";
 
-function MenuIcon(p) { return <FontAwesomeIcon icon={faBars} className={p.className || ''} /> ; }
+function MenuIcon(p) {
+  return <FontAwesomeIcon icon={faBars} className={p.className || ""} />;
+}
 
 export default function Header({onMenuToggle}) {
   const {user} = useAuth();

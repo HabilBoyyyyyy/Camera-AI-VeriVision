@@ -1,8 +1,6 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCamera, faTimes, faUpload } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {faCamera, faTimes, faUpload} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect, useRef} from "react";
 import {fetchInspectionModels, runInspection} from "@/lib/api";
@@ -23,8 +21,12 @@ function FocusIcon(p) {
     </svg>
   );
 }
-function CameraIcon(p) { return <FontAwesomeIcon icon={faCamera} className={p.className || ''} /> ; }
-function UploadIcon(p) { return <FontAwesomeIcon icon={faUpload} className={p.className || ''} /> ; }
+function CameraIcon(p) {
+  return <FontAwesomeIcon icon={faCamera} className={p.className || ""} />;
+}
+function UploadIcon(p) {
+  return <FontAwesomeIcon icon={faUpload} className={p.className || ""} />;
+}
 function TargetIcon(p) {
   return (
     <svg
@@ -39,7 +41,9 @@ function TargetIcon(p) {
     </svg>
   );
 }
-function XIcon(p) { return <FontAwesomeIcon icon={faTimes} className={p.className || ''} /> ; }
+function XIcon(p) {
+  return <FontAwesomeIcon icon={faTimes} className={p.className || ""} />;
+}
 
 export default function LiveInspectionPage() {
   const [models, setModels] = useState([]);

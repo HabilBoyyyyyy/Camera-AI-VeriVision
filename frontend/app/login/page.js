@@ -1,14 +1,14 @@
 "use client";
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faShieldAlt } from '@fortawesome/free-solid-svg-icons';
-
-
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+import {faShieldAlt} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
 import {useAuth} from "@/lib/AuthContext";
 
-function ShieldEyeIcon(p) { return <FontAwesomeIcon icon={faShieldAlt} className={p.className || ''} /> ; }
+function ShieldEyeIcon(p) {
+  return <FontAwesomeIcon icon={faShieldAlt} className={p.className || ""} />;
+}
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -58,7 +58,11 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto mb-4 rounded flex items-center justify-center">
-            <img src="/logo.png" alt="VeriVision Logo" className="w-14 h-14 object-contain" />
+            <img
+              src="/logo.png"
+              alt="VeriVision Logo"
+              className="w-14 h-14 object-contain"
+            />
           </div>
           <h1 className="text-2xl font-display font-bold text-[#e4e7eb] tracking-wide uppercase">
             VeriVision
