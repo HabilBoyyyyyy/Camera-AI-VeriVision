@@ -186,3 +186,8 @@ export function getResultsExportUrl(verdict = null) {
   if (verdict) url += `?verdict=${verdict}`;
   return url;
 }
+
+// ─── Alerts ───────────────────────────────────────
+export async function fetchAlerts() {
+  return apiGet('/api/alerts/');
+}

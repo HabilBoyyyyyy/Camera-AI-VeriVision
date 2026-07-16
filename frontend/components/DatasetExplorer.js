@@ -1,13 +1,17 @@
 "use client";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faArrowLeft, faFolder, faImage, faTrash, faUpload } from '@fortawesome/free-solid-svg-icons';
+
+
 
 import { useState, useEffect, useRef } from "react";
 import { fetchDatasetImages, deleteDatasetImage, addImagesToDataset } from "@/lib/api";
 
-function FolderIcon(p) { return <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>; }
-function ImageIcon(p) { return <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>; }
-function ArrowLeftIcon(p) { return <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>; }
-function TrashIcon(p) { return <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>; }
-function UploadIcon(p) { return <svg {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>; }
+function FolderIcon(p) { return <FontAwesomeIcon icon={faFolder} className={p.className || ''} /> ; }
+function ImageIcon(p) { return <FontAwesomeIcon icon={faImage} className={p.className || ''} /> ; }
+function ArrowLeftIcon(p) { return <FontAwesomeIcon icon={faArrowLeft} className={p.className || ''} /> ; }
+function TrashIcon(p) { return <FontAwesomeIcon icon={faTrash} className={p.className || ''} /> ; }
+function UploadIcon(p) { return <FontAwesomeIcon icon={faUpload} className={p.className || ''} /> ; }
 
 export default function DatasetExplorer({ datasetId, onUpdate }) {
   const [images, setImages] = useState([]);
@@ -75,7 +79,7 @@ export default function DatasetExplorer({ datasetId, onUpdate }) {
   };
 
   if (loading) {
-    return <div className="p-6 text-center text-xs text-slate-500 animate-pulse">Loading files...</div>;
+    return <div className="p-6 text-center text-xs text-[#5a6270] animate-pulse">Loading files...</div>;
   }
 
   // Parse current directory contents
@@ -108,37 +112,37 @@ export default function DatasetExplorer({ datasetId, onUpdate }) {
   };
 
   return (
-    <div className="mt-4 border border-slate-700/50 rounded-xl overflow-hidden bg-slate-900/50">
+    <div className="mt-4 border border-[#2b313a] rounded overflow-hidden bg-[#0f1216]">
       {/* Breadcrumb Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-800/80 border-b border-slate-700/50">
+      <div className="flex items-center justify-between px-4 py-3 bg-[#181c22] border-b border-[#2b313a]">
         <div className="flex items-center">
           <button
             onClick={handleNavigateUp}
             disabled={!currentPath}
-            className="p-1.5 rounded bg-slate-700/50 hover:bg-slate-700 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors mr-3"
+            className="p-1.5 rounded bg-[#1a1e24] hover:bg-[#232830] text-[#8a93a3] disabled:opacity-30 disabled:cursor-not-allowed transition-colors mr-3 border border-[#2b313a]"
           >
             <ArrowLeftIcon className="w-4 h-4" />
           </button>
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-300 truncate">
-            <span className="text-cyan-500 font-bold">root/</span>
+          <div className="flex items-center gap-2 text-xs font-mono text-[#8a93a3] truncate">
+            <span className="text-[#f5a623] font-bold">root/</span>
             {currentPath && <span>{currentPath}</span>}
           </div>
         </div>
 
         {/* Upload Button */}
         <div className="flex items-center">
-          <input 
-            type="file" 
-            multiple 
-            accept="image/*,.zip" 
-            ref={fileInputRef} 
-            className="hidden" 
-            onChange={handleFileChange} 
+          <input
+            type="file"
+            multiple
+            accept="image/*,.zip"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileChange}
           />
           <button
             onClick={handleUploadClick}
             disabled={isUploading}
-            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg shadow-lg disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#f5a623] hover:bg-[#ffb63f] text-[#14171c] rounded shadow-lg disabled:opacity-50 transition-colors"
           >
             {isUploading ? "Uploading..." : (
               <><UploadIcon className="w-3.5 h-3.5" /> Upload Here</>
@@ -150,33 +154,33 @@ export default function DatasetExplorer({ datasetId, onUpdate }) {
       {/* Content Area */}
       <div className="p-4 max-h-96 overflow-y-auto">
         {folderList.length === 0 && currentFiles.length === 0 ? (
-          <div className="text-center py-8 text-xs text-slate-500">Empty directory</div>
+          <div className="text-center py-8 text-xs text-[#5a6270]">Empty directory</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
             {folderList.map(f => (
               <div
                 key={f}
                 onClick={() => handleNavigateDown(f)}
-                className="group flex flex-col items-center justify-center p-4 rounded-xl border border-slate-700/30 bg-slate-800/30 hover:bg-slate-700/50 hover:border-cyan-500/30 cursor-pointer transition-all"
+                className="group flex flex-col items-center justify-center p-4 rounded border border-[#2b313a] bg-[#1a1e24] hover:bg-[#232830] hover:border-[#f5a623]/40 cursor-pointer transition-colors"
               >
-                <FolderIcon className="w-10 h-10 text-cyan-500 mb-2 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-slate-300 text-center truncate w-full">{f}</span>
+                <FolderIcon className="w-10 h-10 text-[#f5a623] mb-2 group-hover:scale-110 transition-transform" />
+                <span className="text-[10px] font-bold text-[#8a93a3] text-center truncate w-full">{f}</span>
               </div>
             ))}
-            
+
             {currentFiles.map((file, idx) => (
-              <div key={idx} className="group flex flex-col items-center rounded-xl overflow-hidden border border-slate-700/30 bg-slate-800/30 relative">
-                
+              <div key={idx} className="group flex flex-col items-center rounded overflow-hidden border border-[#2b313a] bg-[#1a1e24] relative">
+
                 {/* Delete Button */}
-                <button 
+                <button
                   onClick={(e) => handleDelete(file.filename, e)}
-                  className="absolute top-1 right-1 z-20 p-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                  className="absolute top-1 right-1 z-20 p-1.5 bg-[#e5484d] hover:bg-[#f26e72] text-white rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                   title="Delete image"
                 >
                   <TrashIcon className="w-3.5 h-3.5" />
                 </button>
 
-                <div className="w-full aspect-square bg-slate-900 relative">
+                <div className="w-full aspect-square bg-[#0f1216] relative">
                   <img
                     src={`http://localhost:8000${file.url}`}
                     alt={file.filename}
@@ -187,13 +191,13 @@ export default function DatasetExplorer({ datasetId, onUpdate }) {
                     href={`http://localhost:8000${file.url}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/60"
+                    className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-[#0f1216]/70"
                   >
-                    <span className="px-2 py-1 rounded bg-cyan-500 text-white text-[10px] font-bold shadow-lg">View</span>
+                    <span className="px-2 py-1 rounded bg-[#f5a623] text-[#14171c] text-[10px] font-bold shadow-lg">View</span>
                   </a>
                 </div>
-                <div className="w-full p-2 text-center bg-slate-800/80">
-                  <span className="text-[9px] font-mono text-slate-400 truncate block w-full">
+                <div className="w-full p-2 text-center bg-[#181c22]">
+                  <span className="text-[9px] font-mono text-[#5a6270] truncate block w-full">
                     {file.filename.split("/").pop()}
                   </span>
                 </div>

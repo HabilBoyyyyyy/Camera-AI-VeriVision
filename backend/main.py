@@ -8,7 +8,7 @@ import models
 from auth import seed_default_users
 
 from routers import auth_router, dashboard_router, dataset_router
-from routers import training_router, model_router, inspection_router, result_router
+from routers import training_router, model_router, inspection_router, result_router, alerts_router
 
 # Create all database tables
 Base.metadata.create_all(bind=engine)
@@ -32,6 +32,7 @@ app.include_router(training_router.router)
 app.include_router(model_router.router)
 app.include_router(inspection_router.router)
 app.include_router(result_router.router)
+app.include_router(alerts_router.router)
 
 # Ensure data directories exist
 os.makedirs("data/datasets", exist_ok=True)
