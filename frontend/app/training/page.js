@@ -1,6 +1,4 @@
 "use client";
-import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
-import {faMicrochip, faPlay} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect} from "react";
 import {
@@ -11,26 +9,6 @@ import {
 } from "@/lib/api";
 import TrainingMonitor from "@/components/TrainingMonitor";
 
-function CpuIcon(p) {
-  return <FontAwesomeIcon icon={faMicrochip} className={p.className || ""} />;
-}
-function PlayIcon(p) {
-  return <FontAwesomeIcon icon={faPlay} className={p.className || ""} />;
-}
-function ClockIcon(p) {
-  return (
-    <svg
-      {...p}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2">
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
 const CLASSIFICATION_ARCHS = ["resnet50", "efficientnet_b0"];
 const DETECTION_ARCHS = ["yolov8n", "yolov8s"];
 
@@ -39,7 +17,6 @@ export default function TrainingPage() {
   const [models, setModels] = useState([]);
   const [history, setHistory] = useState([]);
 
-  // Config form state
   const [selectedDatasetId, setSelectedDatasetId] = useState("");
   const [modelName, setModelName] = useState("");
   const [taskType, setTaskType] = useState("classification");
@@ -58,13 +35,10 @@ export default function TrainingPage() {
   const [updateExisting, setUpdateExisting] = useState(false);
   const [existingModelId, setExistingModelId] = useState("");
 
-  // Training state
   const [submitting, setSubmitting] = useState(false);
   const [activeJobId, setActiveJobId] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     try {
@@ -76,25 +50,19 @@ export default function TrainingPage() {
       setDatasets(ds || []);
       setModels(ms || []);
       setHistory(h || []);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
-  // Auto-fill model name and task type when dataset changes
   useEffect(() => {
     const ds = datasets.find((d) => d.id === selectedDatasetId);
     if (ds) {
       setModelName(ds.name);
       setTaskType(ds.task_type);
-      setArchitecture(
-        ds.task_type === "classification" ? "resnet50" : "yolov8n",
-      );
+      setArchitecture(ds.task_type === "classification" ? "resnet50" : "yolov8n");
     }
   }, [selectedDatasetId, datasets]);
 
-  const architectures =
-    taskType === "classification" ? CLASSIFICATION_ARCHS : DETECTION_ARCHS;
+  const architectures = taskType === "classification" ? CLASSIFICATION_ARCHS : DETECTION_ARCHS;
 
   const handleStartTraining = async () => {
     setSubmitting(true);
@@ -130,41 +98,36 @@ export default function TrainingPage() {
     }
   };
 
-  const fieldClass =
-    "w-full px-4 py-2.5 rounded bg-[#0f1216] border border-[#2b313a] text-[#dbe0e6] text-sm focus:outline-none focus:border-[#f5a623]/60 transition-colors";
-  const labelClass =
-    "block text-xs font-bold text-[#5a6270] uppercase tracking-wider mb-1.5 font-mono";
-  const checkboxClass =
-    "w-4 h-4 rounded-sm border-[#333b46] bg-[#0f1216] text-[#f5a623] accent-[#f5a623]";
-
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-10">
+    <div className="space-y-8 max-w-5xl mx-auto pb-10 animate-fade-in">
       {/* Header */}
-      <div className="animate-fade-in stagger-1">
+      <div>
         <div className="flex items-center gap-3 mb-1">
-          <CpuIcon className="w-5 h-5 text-[#f5a623]" />
-          <h1 className="text-xl font-display font-bold text-[#e4e7eb] tracking-wide uppercase">
-            Model Training
-          </h1>
+          <span className="material-symbols-outlined text-[22px]" style={{color:"var(--clr-accent)"}}>model_training</span>
+          <h2 className="text-2xl font-semibold" style={{color:"var(--clr-text)"}}>Model Training</h2>
         </div>
-        <p className="text-sm text-[#5a6270] ml-8">
+        <p className="text-sm" style={{color:"var(--clr-text-sub)"}}>
           Configure and train AI models from your datasets
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Config Form */}
-        <div className="lg:col-span-2 glass-card p-6 animate-fade-in stagger-2">
-          <h2 className="section-label mb-5">Training Configuration</h2>
+        <div className="lg:col-span-2 vv-card p-6 animate-fade-in stagger-2">
+          <h3 className="text-sm font-semibold mb-5 uppercase tracking-wider" style={{color:"var(--clr-text-sub)"}}>
+            Training Configuration
+          </h3>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Dataset */}
             <div className="sm:col-span-2">
-              <label className={labelClass}>Dataset</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Target Dataset
+              </label>
               <select
                 value={selectedDatasetId}
                 onChange={(e) => setSelectedDatasetId(e.target.value)}
-                className={fieldClass}>
+              >
                 <option value="">Select dataset...</option>
                 {datasets.map((d) => (
                   <option key={d.id} value={d.id}>
@@ -176,90 +139,83 @@ export default function TrainingPage() {
 
             {/* Model Name */}
             <div>
-              <label className={labelClass}>Model Name</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Model Name
+              </label>
               <input
                 type="text"
                 value={modelName}
                 onChange={(e) => setModelName(e.target.value)}
-                className={fieldClass}
+                placeholder="e.g. Weld_Inspector_v1"
               />
             </div>
 
             {/* Architecture */}
             <div>
-              <label className={labelClass}>Architecture</label>
-              <select
-                value={architecture}
-                onChange={(e) => setArchitecture(e.target.value)}
-                className={fieldClass}>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Architecture Base
+              </label>
+              <select value={architecture} onChange={(e) => setArchitecture(e.target.value)}>
                 {architectures.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
+                  <option key={a} value={a}>{a}</option>
                 ))}
               </select>
             </div>
 
             {/* Epochs */}
             <div>
-              <label className={labelClass}>Epochs</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Epochs
+              </label>
               <input
-                type="number"
-                min="1"
-                max="1000"
+                type="number" min="1" max="1000"
                 value={epochs}
                 onChange={(e) => setEpochs(Number(e.target.value))}
-                className={fieldClass}
               />
             </div>
 
             {/* Batch Size */}
             <div>
-              <label className={labelClass}>Batch Size</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Batch Size
+              </label>
               <input
-                type="number"
-                min="1"
-                max="512"
+                type="number" min="1" max="512"
                 value={batchSize}
                 onChange={(e) => setBatchSize(Number(e.target.value))}
-                className={fieldClass}
               />
             </div>
 
             {/* Image Size */}
             <div>
-              <label className={labelClass}>Image Size</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Image Size
+              </label>
               <input
-                type="number"
-                min="32"
-                max="1280"
+                type="number" min="32" max="1280"
                 value={imageSize}
                 onChange={(e) => setImageSize(Number(e.target.value))}
-                className={fieldClass}
               />
             </div>
 
             {/* Learning Rate */}
             <div>
-              <label className={labelClass}>Learning Rate</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Learning Rate
+              </label>
               <input
-                type="number"
-                step="0.0001"
-                min="0.0001"
-                max="1"
+                type="number" step="0.0001" min="0.0001" max="1"
                 value={learningRate}
                 onChange={(e) => setLearningRate(Number(e.target.value))}
-                className={fieldClass}
               />
             </div>
 
             {/* Optimizer */}
             <div>
-              <label className={labelClass}>Optimizer</label>
-              <select
-                value={optimizer}
-                onChange={(e) => setOptimizer(e.target.value)}
-                className={fieldClass}>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Optimizer
+              </label>
+              <select value={optimizer} onChange={(e) => setOptimizer(e.target.value)}>
                 <option value="adam">Adam</option>
                 <option value="adamw">AdamW</option>
                 <option value="sgd">SGD</option>
@@ -268,62 +224,45 @@ export default function TrainingPage() {
 
             {/* Early Stopping */}
             <div>
-              <label className={labelClass}>Early Stopping Patience</label>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+                Early Stopping Patience
+              </label>
               <input
-                type="number"
-                min="0"
-                max="100"
+                type="number" min="0" max="100"
                 value={earlyStoppingPatience}
-                onChange={(e) =>
-                  setEarlyStoppingPatience(Number(e.target.value))
-                }
-                className={fieldClass}
+                onChange={(e) => setEarlyStoppingPatience(Number(e.target.value))}
               />
             </div>
 
             {/* Toggles */}
-            <div className="sm:col-span-2 flex flex-wrap gap-6 mt-1">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={pretrained}
-                  onChange={(e) => setPretrained(e.target.checked)}
-                  className={checkboxClass}
-                />
-                <span className="text-sm text-[#8a93a3]">
-                  Pretrained Weights
-                </span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={horizontalFlip}
-                  onChange={(e) => setHorizontalFlip(e.target.checked)}
-                  className={checkboxClass}
-                />
-                <span className="text-sm text-[#8a93a3]">Horizontal Flip</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={randomCrop}
-                  onChange={(e) => setRandomCrop(e.target.checked)}
-                  className={checkboxClass}
-                />
-                <span className="text-sm text-[#8a93a3]">Random Crop</span>
-              </label>
+            <div className="sm:col-span-2 flex flex-wrap gap-5 mt-1 pt-3" style={{borderTop:"1px solid var(--clr-border)"}}>
+              {[
+                {label:"Pretrained Weights", val:pretrained, set:setPretrained},
+                {label:"Horizontal Flip",   val:horizontalFlip, set:setHorizontalFlip},
+                {label:"Random Crop",       val:randomCrop, set:setRandomCrop},
+              ].map(({label, val, set}) => (
+                <label key={label} className="flex items-center gap-2 cursor-pointer text-sm" style={{color:"var(--clr-text-sub)"}}>
+                  <input
+                    type="checkbox"
+                    checked={val}
+                    onChange={(e) => set(e.target.checked)}
+                    style={{accentColor:"var(--clr-accent)", width:"15px", height:"15px"}}
+                  />
+                  {label}
+                </label>
+              ))}
             </div>
 
             {/* Update Existing */}
-            <div className="sm:col-span-2 mt-2 p-4 rounded bg-[#0f1216] border border-[#2b313a]">
+            <div className="sm:col-span-2 mt-2 p-4 rounded" style={{background:"var(--clr-surface-low)", border:"1px solid var(--clr-border)"}}>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={updateExisting}
                   onChange={(e) => setUpdateExisting(e.target.checked)}
-                  className={checkboxClass}
+                  style={{accentColor:"var(--clr-accent)", width:"15px", height:"15px"}}
                 />
-                <span className="text-sm font-semibold text-[#8a93a3]">
+                <span className="text-sm font-semibold" style={{color:"var(--clr-text-sub)"}}>
                   Update Existing Model
                 </span>
               </label>
@@ -331,7 +270,8 @@ export default function TrainingPage() {
                 <select
                   value={existingModelId}
                   onChange={(e) => setExistingModelId(e.target.value)}
-                  className={`mt-3 ${fieldClass}`}>
+                  className="mt-3"
+                >
                   <option value="">Select model to update...</option>
                   {models
                     .filter((m) => m.status === "trained")
@@ -348,16 +288,17 @@ export default function TrainingPage() {
           {/* Start Button */}
           <button
             onClick={handleStartTraining}
-            disabled={
-              !selectedDatasetId || !modelName || submitting || !!activeJobId
-            }
-            className="mt-6 w-full py-3.5 rounded bg-[#f5a623] hover:bg-[#ffb63f] text-[#14171c] font-bold text-sm shadow-lg transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-wider flex items-center justify-center gap-2 font-display">
-            <PlayIcon className="w-4 h-4" />
+            disabled={!selectedDatasetId || !modelName || submitting || !!activeJobId}
+            className="btn-primary mt-6 w-full justify-center py-3"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {submitting || activeJobId ? "hourglass_top" : "play_arrow"}
+            </span>
             {submitting
               ? "Submitting..."
               : activeJobId
                 ? "Training in Progress..."
-                : "Start Training"}
+                : "Initialize Training"}
           </button>
         </div>
 
@@ -370,41 +311,32 @@ export default function TrainingPage() {
           />
 
           {/* Training History */}
-          <div className="glass-card overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#2b313a] bg-[#181c22] flex items-center gap-2">
-              <ClockIcon className="w-4 h-4 text-[#8a93a3]" />
-              <h3 className="text-sm font-bold text-[#dbe0e6] font-display uppercase tracking-wide">
-                History
-              </h3>
+          <div className="vv-card overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+              <span className="material-symbols-outlined text-[18px]" style={{color:"var(--clr-text-muted)"}}>history</span>
+              <h3 className="text-sm font-semibold" style={{color:"var(--clr-text)"}}>Training History</h3>
             </div>
-            <div className="divide-y divide-[#232830] max-h-64 overflow-y-auto">
+            <div className="divide-y max-h-64 overflow-y-auto" style={{divideColor:"var(--clr-border)"}}>
               {history.length === 0 ? (
-                <div className="p-6 text-center text-xs text-[#5a6270]">
+                <div className="p-8 text-center text-xs" style={{color:"var(--clr-text-muted)"}}>
                   No training history
                 </div>
               ) : (
                 history.map((job) => (
-                  <div
-                    key={job.job_id}
-                    className="px-5 py-3 flex items-center justify-between">
+                  <div key={job.job_id} className="px-4 py-3 flex items-center justify-between gap-2" style={{borderBottom:"1px solid var(--clr-border)"}}>
                     <div className="min-w-0">
-                      <p className="text-sm text-[#8a93a3] truncate">
-                        {job.model_name || "Model"}
-                      </p>
-                      <p className="text-[10px] text-[#5a6270] font-mono">
-                        {new Date(
-                          job.started_at || job.created_at,
-                        ).toLocaleString()}
+                      <p className="text-sm font-medium truncate" style={{color:"var(--clr-text)"}}>{job.model_name || "Model"}</p>
+                      <p className="text-[10px] font-mono" style={{color:"var(--clr-text-muted)"}}>
+                        {new Date(job.started_at || job.created_at).toLocaleString()}
                       </p>
                     </div>
-                    <span
-                      className={`text-[9px] font-bold px-2 py-0.5 rounded-sm uppercase font-mono ${
-                        job.status === "completed"
-                          ? "bg-[#2fb380]/15 text-[#4fd39a]"
-                          : job.status === "failed"
-                            ? "bg-[#e5484d]/15 text-[#f26e72]"
-                            : "bg-[#f5a623]/15 text-[#f5a623]"
-                      }`}>
+                    <span className={`badge shrink-0 ${
+                      job.status === "completed"
+                        ? "badge-pass"
+                        : job.status === "failed"
+                          ? "badge-fail"
+                          : "badge-syncing"
+                    }`}>
                       {job.status}
                     </span>
                   </div>

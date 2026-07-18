@@ -1,445 +1,357 @@
 "use client";
-import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
-import {
-  faChevronLeft,
-  faChevronRight,
-  faDownload,
-  faList,
-  faFilter,
-  faTimes,
-  faTrash,
-} from "@fortawesome/free-solid-svg-icons";
 
 import {useState, useEffect} from "react";
-import {
-  fetchResults,
-  getResultsExportUrl,
-  fetchModels,
-  deleteResult,
-} from "@/lib/api";
+import {fetchResults, getResultsExportUrl, fetchModels, deleteResult} from "@/lib/api";
 
-function ListIcon(p) {
-  return <FontAwesomeIcon icon={faList} className={p.className || ""} />;
+const BASE_URL = "http://localhost:8000";
+
+function VerdictBadge({verdict}) {
+  if (verdict === "OK")  return <span className="badge badge-pass">✓ PASS</span>;
+  if (verdict === "NG")  return <span className="badge badge-fail">✗ FAIL</span>;
+  return <span className="badge badge-review">~ REVIEW</span>;
 }
-function DownloadIcon(p) {
-  return <FontAwesomeIcon icon={faDownload} className={p.className || ""} />;
-}
-function ChevronLeftIcon(p) {
-  return <FontAwesomeIcon icon={faChevronLeft} className={p.className || ""} />;
-}
-function ChevronRightIcon(p) {
+
+function FilterLabel({children}) {
   return (
-    <FontAwesomeIcon icon={faChevronRight} className={p.className || ""} />
+    <p className="text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{color:"var(--clr-text-muted)"}}>
+      {children}
+    </p>
   );
-}
-function FilterIcon(p) {
-  return <FontAwesomeIcon icon={faFilter} className={p.className || ""} />;
-}
-function TimesIcon(p) {
-  return <FontAwesomeIcon icon={faTimes} className={p.className || ""} />;
-}
-function TrashIcon(p) {
-  return <FontAwesomeIcon icon={faTrash} className={p.className || ""} />;
 }
 
 export default function ResultsPage() {
-  const [results, setResults] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-
-  // Available models for dropdown
+  const [results,    setResults]    = useState([]);
+  const [total,      setTotal]      = useState(0);
+  const [page,       setPage]       = useState(1);
+  const [pages,      setPages]      = useState(1);
   const [modelsList, setModelsList] = useState([]);
-
-  // Advanced Filters
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    verdict: "",
-    model_id: "",
-    start_date: "",
-    end_date: "",
-    min_conf: "",
-    max_conf: "",
-    search_id: "",
+  const [loading,    setLoading]    = useState(true);
+  const [expanded,   setExpanded]   = useState(null);
+  const [filters,    setFilters]    = useState({
+    verdict:"", model_id:"", start_date:"", end_date:"", search_id:""
   });
-
-  const [loading, setLoading] = useState(true);
   const limit = 20;
 
   useEffect(() => {
-    // Load models for the filter dropdown
-    fetchModels()
-      .then((data) => setModelsList(data || []))
-      .catch(console.error);
+    fetchModels().then(d => setModelsList(d || [])).catch(() => {});
   }, []);
 
-  const loadResults = async () => {
+  const load = async (pg = page, f = filters) => {
     setLoading(true);
     try {
-      const data = await fetchResults(page, limit, filters);
+      const data = await fetchResults(pg, limit, f);
       setResults(data.items || []);
       setTotal(data.total || 0);
       setPages(data.pages || 1);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
-  // Re-load when page changes or when filters are applied (debounced/handled by a button)
-  useEffect(() => {
-    loadResults();
-  }, [page]);
+  useEffect(() => { load(); }, [page]);
 
-  const applyFilters = () => {
-    setPage(1);
-    loadResults();
-  };
-
+  const applyFilters = () => { setPage(1); load(1, filters); };
   const resetFilters = () => {
-    setFilters({
-      verdict: "",
-      model_id: "",
-      start_date: "",
-      end_date: "",
-      min_conf: "",
-      max_conf: "",
-      search_id: "",
-    });
-    setPage(1);
-    // React state update is async, so we'll wait for the next render or load manually
-    setTimeout(() => {
-      loadResults();
-    }, 0);
-  };
-
-  const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({...prev, [key]: value}));
-  };
-
-  const verdictBadge = (v) => {
-    if (v === "OK") return "bg-[#2fb380]/15 text-[#4fd39a] border-[#2fb380]/25";
-    if (v === "NG") return "bg-[#e5484d]/15 text-[#f26e72] border-[#e5484d]/25";
-    return "bg-[#f5a623]/15 text-[#f5a623] border-[#f5a623]/25";
+    const blank = {verdict:"", model_id:"", start_date:"", end_date:"", search_id:""};
+    setFilters(blank); setPage(1); load(1, blank);
   };
 
   const handleDelete = async (id) => {
-    if (confirm("Are you sure you want to delete this inspection result?")) {
-      try {
-        await deleteResult(id);
-        loadResults(); // Reload the list after deletion
-      } catch (e) {
-        console.error("Failed to delete", e);
-        alert("Failed to delete result.");
-      }
-    }
+    if (!confirm("Delete this inspection result?")) return;
+    try { await deleteResult(id); load(); }
+    catch(e) { alert("Failed to delete: " + e.message); }
   };
 
+  const pageNums = [...Array(Math.min(5, pages))].map((_, i) => i + 1);
+
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in stagger-1">
+    <div className="space-y-6 max-w-5xl mx-auto pb-10 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <ListIcon className="w-5 h-5 text-[#f5a623]" />
-            <h1 className="text-xl font-display font-bold text-[#e4e7eb] tracking-wide uppercase">
-              Inspection Results
-            </h1>
+            <span className="material-symbols-outlined text-[22px]" style={{color:"var(--clr-accent)"}}>analytics</span>
+            <h2 className="text-2xl font-semibold" style={{color:"var(--clr-text)"}}>Final Inspection Results</h2>
           </div>
-          <p className="text-sm text-[#5a6270] ml-8">
-            {total} total inspections
+          <p className="text-sm" style={{color:"var(--clr-text-sub)"}}>
+            Historical records of automated visual inspections across all production lines.
           </p>
         </div>
-        <div className="flex gap-3 items-center">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2 rounded text-xs font-bold transition-colors border ${showFilters ? "bg-[#f5a623]/20 text-[#f5a623] border-[#f5a623]/40" : "bg-[#1a1e24] text-[#8a93a3] border-[#2b313a] hover:bg-[#232830]"}`}>
-            <FilterIcon className="w-3.5 h-3.5" /> Filters
-          </button>
-          <a
-            href={getResultsExportUrl(filters)}
-            className="flex items-center gap-2 px-4 py-2 rounded bg-[#f5a623]/10 hover:bg-[#f5a623]/20 text-[#f5a623] text-xs font-bold transition-colors border border-[#f5a623]/25">
-            <DownloadIcon className="w-3.5 h-3.5" /> Export CSV
-          </a>
+        <a href={getResultsExportUrl(filters)} className="btn-primary shrink-0">
+          <span className="material-symbols-outlined text-[18px]">download</span>
+          Export CSV
+        </a>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="vv-card p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Date Range — fixed padding so icon doesn't overlap */}
+          <div>
+            <FilterLabel>Date Range</FilterLabel>
+            <div className="relative flex items-center">
+              <span className="material-symbols-outlined absolute left-3 text-[16px] pointer-events-none z-10"
+                style={{color:"var(--clr-text-muted)"}}>calendar_today</span>
+              <select
+                value={filters.start_date}
+                onChange={e => setFilters(p => ({...p, start_date:e.target.value}))}
+                style={{paddingLeft:"2.25rem"}}
+              >
+                <option value="">Last 7 Days</option>
+                <option value="">Last 30 Days</option>
+                <option value="">Custom</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Model */}
+          <div>
+            <FilterLabel>Model</FilterLabel>
+            <select value={filters.model_id} onChange={e => setFilters(p => ({...p, model_id:e.target.value}))}>
+              <option value="">All Models</option>
+              {modelsList.map(m => (
+                <option key={m.id} value={m.id}>{m.name} v{m.version}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Verdict */}
+          <div>
+            <FilterLabel>Verdict</FilterLabel>
+            <select value={filters.verdict} onChange={e => setFilters(p => ({...p, verdict:e.target.value}))}>
+              <option value="">All Verdicts</option>
+              <option value="OK">Pass Only</option>
+              <option value="NG">Fail Only</option>
+              <option value="Uncertain">Review Only</option>
+            </select>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-end gap-2">
+            <button onClick={applyFilters} className="btn-primary flex-1 justify-center py-2">Apply</button>
+            <button onClick={resetFilters} className="btn-outline py-2 px-3" title="Clear filters">
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Search by ID */}
+        <div className="mt-3">
+          <div className="relative flex items-center">
+            <span className="material-symbols-outlined absolute left-3 text-[16px] pointer-events-none" style={{color:"var(--clr-text-muted)"}}>search</span>
+            <input
+              type="text"
+              value={filters.search_id}
+              onChange={e => setFilters(p => ({...p, search_id:e.target.value}))}
+              onKeyDown={e => e.key === "Enter" && applyFilters()}
+              placeholder="Search by inspection ID..."
+              style={{paddingLeft:"2.25rem"}}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Advanced Filters Panel */}
-      {showFilters && (
-        <div className="glass-card p-5 animate-fade-in stagger-2 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Search ID */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1.5">
-                Search ID
-              </label>
-              <input
-                type="text"
-                placeholder="Partial or full ID..."
-                value={filters.search_id}
-                onChange={(e) =>
-                  handleFilterChange("search_id", e.target.value)
-                }
-                className="w-full px-3 py-2 rounded bg-[#0f1216] border border-[#2b313a] text-[#dbe0e6] text-sm focus:outline-none focus:border-[#f5a623]/60"
-              />
-            </div>
+      {/* Summary row */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <span className="text-sm font-semibold" style={{color:"var(--clr-text)"}}>
+          {total.toLocaleString()} records
+        </span>
+        {filters.verdict && <span className="badge badge-archived">Filter: {filters.verdict}</span>}
+        {filters.model_id && <span className="badge badge-archived">Model filter active</span>}
+      </div>
 
-            {/* Verdict */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1.5">
-                Verdict
-              </label>
-              <select
-                value={filters.verdict}
-                onChange={(e) => handleFilterChange("verdict", e.target.value)}
-                className="w-full px-3 py-2 rounded bg-[#0f1216] border border-[#2b313a] text-[#dbe0e6] text-sm focus:outline-none focus:border-[#f5a623]/60">
-                <option value="">All Verdicts</option>
-                <option value="OK">OK (Pass)</option>
-                <option value="NG">NG (Fail)</option>
-                <option value="Uncertain">Uncertain</option>
-              </select>
-            </div>
-
-            {/* Model Selection */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1.5">
-                AI Model
-              </label>
-              <select
-                value={filters.model_id}
-                onChange={(e) => handleFilterChange("model_id", e.target.value)}
-                className="w-full px-3 py-2 rounded bg-[#0f1216] border border-[#2b313a] text-[#dbe0e6] text-sm focus:outline-none focus:border-[#f5a623]/60">
-                <option value="">All Models</option>
-                {modelsList.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} (v{m.version})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Date Range Start */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1.5">
-                Start Date
-              </label>
-              <input
-                type="datetime-local"
-                value={filters.start_date}
-                onChange={(e) =>
-                  handleFilterChange("start_date", e.target.value)
-                }
-                className="w-full px-3 py-2 rounded bg-[#0f1216] border border-[#2b313a] text-[#dbe0e6] text-sm focus:outline-none focus:border-[#f5a623]/60"
-                style={{colorScheme: "dark"}}
-              />
-            </div>
-
-            {/* Date Range End */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1.5">
-                End Date
-              </label>
-              <input
-                type="datetime-local"
-                value={filters.end_date}
-                onChange={(e) => handleFilterChange("end_date", e.target.value)}
-                className="w-full px-3 py-2 rounded bg-[#0f1216] border border-[#2b313a] text-[#dbe0e6] text-sm focus:outline-none focus:border-[#f5a623]/60"
-                style={{colorScheme: "dark"}}
-              />
-            </div>
-
-            {/* Confidence Sliders */}
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="flex justify-between text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1">
-                  <span>Min Confidence</span>
-                  <span className="text-[#f5a623]">
-                    {filters.min_conf
-                      ? (filters.min_conf * 100).toFixed(0) + "%"
-                      : "0%"}
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={filters.min_conf === "" ? 0 : filters.min_conf}
-                  onChange={(e) =>
-                    handleFilterChange("min_conf", parseFloat(e.target.value))
-                  }
-                  className="w-full accent-[#f5a623]"
-                />
-              </div>
-              <div>
-                <label className="flex justify-between text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono mb-1">
-                  <span>Max Confidence</span>
-                  <span className="text-[#f5a623]">
-                    {filters.max_conf !== ""
-                      ? (filters.max_conf * 100).toFixed(0) + "%"
-                      : "100%"}
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={filters.max_conf === "" ? 1 : filters.max_conf}
-                  onChange={(e) =>
-                    handleFilterChange("max_conf", parseFloat(e.target.value))
-                  }
-                  className="w-full accent-[#f5a623]"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-3 border-t border-[#2b313a]">
-            <button
-              onClick={resetFilters}
-              className="px-4 py-2 rounded text-xs font-bold bg-[#1a1e24] text-[#8a93a3] hover:bg-[#232830] transition-colors border border-[#2b313a]">
-              Reset
-            </button>
-            <button
-              onClick={applyFilters}
-              className="px-4 py-2 rounded text-xs font-bold bg-[#f5a623] text-[#14171c] hover:bg-[#ffb63f] transition-colors">
-              Apply Filters
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div
-        className={`glass-card overflow-hidden animate-fade-in ${showFilters ? "stagger-3" : "stagger-2"}`}>
+      {/* Table */}
+      <div className="vv-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-[#181c22] border-b border-[#2b313a]">
-                <th className="px-5 py-3 text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono">
-                  Timestamp
-                </th>
-                <th className="px-5 py-3 text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono">
-                  ID
-                </th>
-                <th className="px-5 py-3 text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono">
-                  Confidence
-                </th>
-                <th className="px-5 py-3 text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono">
-                  Verdict
-                </th>
-                <th className="px-5 py-3 text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono">
-                  Image
-                </th>
-                <th className="px-5 py-3 text-[10px] font-bold text-[#5a6270] uppercase tracking-wider font-mono text-right">
-                  Action
-                </th>
+          <table className="w-full text-left text-sm">
+            <thead style={{background:"var(--clr-surface-low)"}}>
+              <tr style={{borderBottom:"1px solid var(--clr-border)"}}>
+                {["Inspection ID","Timestamp","Part Number","Line","Verdict","Actions"].map(h => (
+                  <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap"
+                    style={{color:"var(--clr-text-muted)"}}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#232830]">
+            <tbody>
               {loading ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="px-5 py-12 text-center text-[#5a6270] text-sm animate-pulse">
-                    Loading...
-                  </td>
-                </tr>
-              ) : results.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    className="px-5 py-12 text-center text-[#5a6270] text-sm">
-                    No inspection results found for these filters
-                  </td>
-                </tr>
-              ) : (
-                results.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="hover:bg-[#1e232a] transition-colors">
-                    <td className="px-5 py-3 text-xs text-[#8a93a3] font-mono whitespace-nowrap">
-                      {r.created_at
-                        ? new Date(r.created_at).toLocaleString()
-                        : "-"}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-[#8a93a3] font-mono">
-                      {r.id.substring(0, 8)}...
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 pass-rate-bar">
-                          <div
-                            className={`pass-rate-fill ${
-                              r.verdict === "OK"
-                                ? "bg-[#2fb380]"
-                                : r.verdict === "NG"
-                                  ? "bg-[#e5484d]"
-                                  : "bg-[#f5a623]"
-                            }`}
-                            style={{width: `${r.confidence * 100}%`}}
-                          />
-                        </div>
-                        <span className="text-xs text-[#8a93a3] font-mono">
-                          {(r.confidence * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-sm border uppercase tracking-wider font-mono ${verdictBadge(r.verdict)}`}>
-                        {r.verdict}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      {r.image_path ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`http://localhost:8000${r.image_path}`}
-                          alt=""
-                          className="w-10 h-10 rounded object-cover border border-[#2b313a]"
-                        />
-                      ) : (
-                        <span className="text-xs text-[#3a4149]">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        onClick={() => handleDelete(r.id)}
-                        className="p-1.5 rounded text-[#8a93a3] hover:text-[#e5484d] hover:bg-[#e5484d]/10 transition-colors"
-                        title="Delete Result">
-                        <TrashIcon className="w-3.5 h-3.5" />
-                      </button>
+                [1,2,4].map(i => (
+                  <tr key={i} style={{borderBottom:"1px solid var(--clr-border)"}}>
+                    <td colSpan={6} className="px-5 py-10 text-center">
+                      <div className="w-5 h-5 border-2 rounded-full animate-spin mx-auto"
+                        style={{borderColor:"var(--clr-border)", borderTopColor:"var(--clr-accent)"}} />
                     </td>
                   </tr>
                 ))
+              ) : results.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center" style={{color:"var(--clr-text-muted)"}}>
+                    <span className="material-symbols-outlined text-[48px] block mb-3 opacity-40">search_off</span>
+                    No inspection results found for these filters.
+                  </td>
+                </tr>
+              ) : (
+                results.flatMap((r) => {
+                  const rows = [];
+
+                  rows.push(
+                    <tr
+                      key={r.id}
+                      style={{
+                        borderBottom:"1px solid var(--clr-border)",
+                        background: expanded === r.id ? "var(--clr-surface-low)" : undefined,
+                        cursor:"pointer",
+                      }}
+                      onMouseEnter={e => { if (expanded !== r.id) e.currentTarget.style.background="var(--clr-surface-low)"; }}
+                      onMouseLeave={e => { if (expanded !== r.id) e.currentTarget.style.background=""; }}
+                    >
+                      <td className="px-5 py-3 font-mono text-[12px]" style={{color:"var(--clr-text)"}}>
+                        #{r.id?.substring?.(0,12) ?? r.id}
+                      </td>
+                      <td className="px-5 py-3 text-[12px] whitespace-nowrap" style={{color:"var(--clr-text-sub)"}}>
+                        {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
+                      </td>
+                      <td className="px-5 py-3 font-semibold" style={{color:"var(--clr-text)"}}>
+                        PN-{r.id?.substring?.(0,6).toUpperCase() ?? ""}
+                      </td>
+                      <td className="px-5 py-3" style={{color:"var(--clr-text-sub)"}}>Line A</td>
+                      <td className="px-5 py-3"><VerdictBadge verdict={r.verdict} /></td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                            title="View details"
+                            className="p-1.5 rounded transition-colors"
+                            style={{color:"var(--clr-text-muted)"}}
+                            onMouseEnter={e => { e.currentTarget.style.color="var(--clr-accent)"; e.currentTarget.style.background="var(--clr-surface-mid)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color="var(--clr-text-muted)"; e.currentTarget.style.background=""; }}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              {expanded === r.id ? "expand_less" : "visibility"}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            title="Delete result"
+                            className="p-1.5 rounded transition-colors"
+                            style={{color:"var(--clr-text-muted)"}}
+                            onMouseEnter={e => { e.currentTarget.style.color="var(--clr-error)"; e.currentTarget.style.background="rgba(186,26,26,.08)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color="var(--clr-text-muted)"; e.currentTarget.style.background=""; }}
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+
+                  if (expanded === r.id) {
+                    rows.push(
+                      <tr key={r.id + "-exp"} style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+                        <td colSpan={6} className="px-5 py-5">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Image */}
+                            <div className="vv-card overflow-hidden">
+                              <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider flex justify-between"
+                                style={{background:"var(--clr-surface-mid)", color:"var(--clr-text-muted)", borderBottom:"1px solid var(--clr-border)"}}>
+                                <span>Defect Map (AI)</span>
+                                <span className="material-symbols-outlined text-[16px]">fullscreen</span>
+                              </div>
+                              {r.image_path ? (
+                                <div className="relative" style={{background:"#000"}}>
+                                  <img src={`${BASE_URL}${r.image_path}`} alt="Inspection" className="w-full object-cover" />
+                                  {r.verdict === "NG" && (
+                                    <div className="absolute top-3 left-3 border-2 border-red-500 bg-red-500/20 px-2 py-0.5">
+                                      <span className="text-[10px] text-red-400 font-bold">DEFECT {(r.confidence*100).toFixed(0)}%</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="h-32 flex items-center justify-center" style={{background:"var(--clr-surface-mid)"}}>
+                                  <span className="material-symbols-outlined text-[40px]" style={{color:"var(--clr-border)"}}>image</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Scores */}
+                            <div className="space-y-3">
+                              <div className="vv-card p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>Anomaly Score</p>
+                                <p className="text-2xl font-bold" style={{color: r.verdict==="NG" ? "var(--clr-error)" : "var(--clr-success)"}}>
+                                  {r.confidence?.toFixed(2)} <span className="text-sm font-normal" style={{color:"var(--clr-text-muted)"}}>/1.0</span>
+                                </p>
+                              </div>
+                              <div className="vv-card p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>Verdict</p>
+                                <VerdictBadge verdict={r.verdict} />
+                              </div>
+                              <div className="vv-card p-4">
+                                <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>Model</p>
+                                <p className="text-sm font-mono font-semibold" style={{color:"var(--clr-text)"}}>v{r.model_version || "4.2.1"}</p>
+                              </div>
+                            </div>
+
+                            {/* Review */}
+                            <div className="vv-card p-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>Review Notes</p>
+                              <textarea
+                                className="w-full h-24 text-sm resize-none"
+                                placeholder="Enter manual review observations..."
+                              />
+                              <div className="flex gap-2 mt-3">
+                                <button className="btn-outline flex-1 justify-center text-xs py-2">False Positive</button>
+                                <button className="btn-primary flex-1 justify-center text-xs py-2">Confirm Defect</button>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return rows;
+                })
               )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        {pages > 1 && (
-          <div className="px-5 py-3 border-t border-[#2b313a] flex items-center justify-between">
-            <span className="text-xs text-[#5a6270] font-mono">
-              Page {page} of {pages}
-            </span>
-            <div className="flex gap-2">
+        <div className="px-5 py-3 flex items-center justify-between text-sm flex-wrap gap-3"
+          style={{borderTop:"1px solid var(--clr-border)"}}>
+          <span style={{color:"var(--clr-text-muted)"}}>
+            Showing {total === 0 ? 0 : ((page-1)*limit)+1}–{Math.min(page*limit, total)} of {total.toLocaleString()} records
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(Math.max(1, page-1))}
+              disabled={page <= 1}
+              className="px-2 py-1 rounded border text-sm disabled:opacity-30"
+              style={{borderColor:"var(--clr-border)", color:"var(--clr-text-sub)"}}
+            >
+              <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+            </button>
+            {pageNums.map(pg => (
               <button
-                onClick={() => setPage(Math.max(1, page - 1))}
-                disabled={page <= 1}
-                className="p-1.5 rounded bg-[#1a1e24] hover:bg-[#232830] text-[#8a93a3] disabled:opacity-30 transition-colors border border-[#2b313a]">
-                <ChevronLeftIcon className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setPage(Math.min(pages, page + 1))}
-                disabled={page >= pages}
-                className="p-1.5 rounded bg-[#1a1e24] hover:bg-[#232830] text-[#8a93a3] disabled:opacity-30 transition-colors border border-[#2b313a]">
-                <ChevronRightIcon className="w-4 h-4" />
-              </button>
-            </div>
+                key={pg}
+                onClick={() => setPage(pg)}
+                className="w-8 h-8 rounded border text-xs font-semibold transition-colors"
+                style={{
+                  borderColor: page===pg ? "var(--clr-text)" : "var(--clr-border)",
+                  background:  page===pg ? "var(--clr-text)" : "transparent",
+                  color:       page===pg ? "var(--clr-bg)"  : "var(--clr-text-muted)",
+                }}
+              >{pg}</button>
+            ))}
+            {pages > 5 && <span style={{color:"var(--clr-text-muted)"}}>…</span>}
+            <button
+              onClick={() => setPage(Math.min(pages, page+1))}
+              disabled={page >= pages}
+              className="px-2 py-1 rounded border text-sm disabled:opacity-30"
+              style={{borderColor:"var(--clr-border)", color:"var(--clr-text-sub)"}}
+            >
+              <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

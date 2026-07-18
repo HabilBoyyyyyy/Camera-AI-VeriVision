@@ -1,54 +1,75 @@
 "use client";
 
-import {useState} from "react";
+import {useState, useEffect} from "react";
 import {useRouter, usePathname} from "next/navigation";
 import {AuthProvider, useAuth} from "@/lib/AuthContext";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
-import FloatingAlertBadge from "@/components/FloatingAlertBadge";
 import FloatingChatbot from "@/components/FloatingChatbot";
+import FloatingAlertBadge from "@/components/FloatingAlertBadge";
 import "./globals.css";
-import {useEffect} from "react";
 
-function AppShell({children}) {
+// ── Dark mode provider ─────────────────────────────────────────
+function ThemeProvider({children}) {
+  const [dark, setDark] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("vv-theme");
+    if (saved === "dark") { setDark(true); document.documentElement.setAttribute("data-theme", "dark"); }
+  }, []);
+
+  const toggle = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.setAttribute("data-theme", next ? "dark" : "");
+    localStorage.setItem("vv-theme", next ? "dark" : "light");
+  };
+
+  return children(dark, toggle);
+}
+
+function AppShell({children, dark, toggleDark}) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const {user, loading} = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user && pathname !== "/login") {
-      router.push("/login");
-    }
+    if (!loading && !user && pathname !== "/login") router.push("/login");
   }, [user, loading, pathname, router]);
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#14171c]">
-        <div className="animate-pulse text-[#5a6270] text-sm font-bold tracking-widest uppercase font-mono">
-          Loading...
+      <div className="flex h-screen items-center justify-center" style={{background:"var(--clr-bg)"}}>
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-[var(--clr-border)] border-t-[var(--clr-accent)] rounded-full animate-spin" />
+          <span className="text-xs uppercase tracking-widest font-semibold" style={{color:"var(--clr-text-muted)"}}>Loading…</span>
         </div>
       </div>
     );
   }
 
-  if (pathname === "/login") {
-    return <>{children}</>;
-  }
-
-  if (!user) {
-    return null;
-  }
+  if (pathname === "/login") return <>{children}</>;
+  if (!user) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden relative">
+    <div className="flex h-screen overflow-hidden" style={{background:"var(--clr-bg)"}}>
+      {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col overflow-hidden relative bg-[#14171c]">
-        <Header onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 overflow-y-auto p-5 lg:p-8 pb-24 relative">
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Main area */}
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-[216px]">
+        <Header onMenuToggle={() => setSidebarOpen(!sidebarOpen)} dark={dark} toggleDark={toggleDark} />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 relative">
           {children}
         </main>
       </div>
+
       <FloatingChatbot />
       <FloatingAlertBadge />
     </div>
@@ -59,26 +80,24 @@ export default function RootLayout({children}) {
   return (
     <html lang="en">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-        <title>VeriVision — AI Visual Inspection</title>
-        <meta
-          name="description"
-          content="AI-powered visual inspection platform for quality control"
-        />
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0&display=swap" rel="stylesheet" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+        <title>VERIVISION — Industrial AI Platform</title>
+        <meta name="description" content="Industrial AI-powered visual inspection for quality control" />
       </head>
-      <body className="bg-[#14171c] text-[#c4c9d1] min-h-screen">
+      <body style={{background:"var(--clr-bg)", color:"var(--clr-text)", minHeight:"100vh"}}>
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <ThemeProvider>
+            {(dark, toggleDark) => (
+              <AppShell dark={dark} toggleDark={toggleDark}>
+                {children}
+              </AppShell>
+            )}
+          </ThemeProvider>
         </AuthProvider>
       </body>
     </html>
