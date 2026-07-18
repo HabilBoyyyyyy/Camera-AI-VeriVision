@@ -18,6 +18,45 @@ for d in (UPLOADS_DIR, DATASETS_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 
+@router.post("/create")
+async def create_empty_dataset(
+    name: str = Form(...),
+    task_type: str = Form("classification"),
+    user: models.User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Create an empty dataset (no zip upload). Used by camera capture flow."""
+    dataset = models.Dataset(
+        name=name.strip(),
+        task_type=task_type,
+        num_images=0,
+    )
+    db.add(dataset)
+    db.commit()
+    db.refresh(dataset)
+
+    # Create the folder structure
+    ds_dir = DATASETS_DIR / dataset.id
+    if task_type == "classification":
+        (ds_dir / "train" / "OK").mkdir(parents=True, exist_ok=True)
+        (ds_dir / "train" / "NG").mkdir(parents=True, exist_ok=True)
+        (ds_dir / "valid" / "OK").mkdir(parents=True, exist_ok=True)
+        (ds_dir / "valid" / "NG").mkdir(parents=True, exist_ok=True)
+    else:
+        (ds_dir / "images").mkdir(parents=True, exist_ok=True)
+        (ds_dir / "labels").mkdir(parents=True, exist_ok=True)
+
+    dataset.folder_path = str(ds_dir)
+    dataset.classes_json = json.dumps(["OK", "NG"] if task_type == "classification" else [])
+    db.commit()
+
+    return {
+        "dataset_id": dataset.id,
+        "name": dataset.name,
+        "task_type": dataset.task_type,
+    }
+
+
 @router.post("/upload")
 async def upload_dataset(
     file: UploadFile = File(...),

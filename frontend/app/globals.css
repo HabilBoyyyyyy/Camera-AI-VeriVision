@@ -283,11 +283,11 @@ input[type="range"] {
   border-radius: 2px; border: none; padding: 0; width: 100%;
 }
 input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 15px; height: 15px;
+  -webkit-appearance: none; appearance: none; width: 15px; height: 15px;
   background: var(--clr-text); border-radius: 50%; cursor: pointer;
   border: 2px solid var(--clr-surface);
 }
-select { -webkit-appearance: auto; }
+select { -webkit-appearance: auto; appearance: auto; }
 option { background: var(--clr-surface); color: var(--clr-text); }
 
 /* ════════════════════════════════════════════════════════════
@@ -400,3 +400,141 @@ th, td { vertical-align: middle; }
   .btn-primary, .btn-outline { padding: 7px 12px; font-size: 12px; }
   .vv-card { border-radius: 4px; }
 }
+
+/* ════════════════════════════════════════════════════════════
+   CAMERA CAPTURE MODAL
+   ════════════════════════════════════════════════════════════ */
+.camera-modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.85);
+  display: flex; flex-direction: column;
+  animation: fadeIn 0.2s ease-out both;
+}
+.camera-preview {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.camera-preview video {
+  max-width: 100%; max-height: 100%; border-radius: 8px;
+  box-shadow: 0 0 40px rgba(0,140,199,0.15);
+}
+.camera-gallery {
+  display: flex; gap: 8px; padding: 12px 16px;
+  overflow-x: auto; background: rgba(0,0,0,0.5);
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.camera-gallery-thumb {
+  width: 64px; height: 64px; border-radius: 6px;
+  object-fit: cover; border: 2px solid rgba(255,255,255,0.15);
+  cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+  flex-shrink: 0;
+}
+.camera-gallery-thumb:hover { border-color: var(--clr-accent); transform: scale(1.08); }
+@keyframes shutterFlash {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+.shutter-flash {
+  position: absolute; inset: 0; background: white;
+  pointer-events: none; animation: shutterFlash 0.15s ease-out forwards;
+}
+.capture-btn {
+  width: 64px; height: 64px; border-radius: 50%;
+  border: 4px solid rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.15);
+  cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.capture-btn:hover { background: rgba(255,255,255,0.3); transform: scale(1.08); }
+.capture-btn:active { transform: scale(0.95); }
+
+/* ════════════════════════════════════════════════════════════
+   IMAGE LABELER
+   ════════════════════════════════════════════════════════════ */
+.labeler-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: var(--clr-bg);
+  display: flex; flex-direction: column;
+  animation: fadeIn 0.15s ease-out both;
+}
+.labeler-toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  background: var(--clr-surface);
+  border-bottom: 1px solid var(--clr-border);
+  flex-shrink: 0;
+}
+.labeler-tool-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 12px; border-radius: 5px;
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  border: 1px solid var(--clr-border);
+  background: var(--clr-surface);
+  color: var(--clr-text-sub);
+  cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+}
+.labeler-tool-btn:hover { background: var(--clr-surface-low); color: var(--clr-text); }
+.labeler-tool-btn.active {
+  background: var(--clr-accent);
+  color: #fff;
+  border-color: var(--clr-accent);
+}
+.labeler-canvas-wrap {
+  flex: 1; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--clr-surface-low);
+}
+.labeler-sidebar {
+  width: 260px; flex-shrink: 0;
+  background: var(--clr-surface);
+  border-left: 1px solid var(--clr-border);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+.labeler-annot-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--clr-border-light);
+  cursor: pointer; transition: background 0.1s;
+  font-size: 12px;
+}
+.labeler-annot-item:hover { background: var(--clr-surface-low); }
+.labeler-annot-item.selected { background: color-mix(in srgb, var(--clr-accent) 10%, transparent); }
+.labeler-color-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+
+/* ── Source Tabs (datasets page) ── */
+.source-tabs {
+  display: flex; gap: 2px;
+  background: var(--clr-surface-low);
+  border-radius: 8px; padding: 3px;
+  border: 1px solid var(--clr-border);
+}
+.source-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 16px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; font-family: inherit;
+  color: var(--clr-text-sub);
+  background: transparent; border: none;
+  cursor: pointer; transition: all 0.2s;
+  white-space: nowrap;
+}
+.source-tab:hover { color: var(--clr-text); background: var(--clr-surface); }
+.source-tab.active {
+  background: var(--clr-surface);
+  color: var(--clr-text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* ── Annotation badge on thumbnails ── */
+.annot-badge {
+  position: absolute; top: 4px; left: 4px; z-index: 15;
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 9px; font-weight: 700;
+  background: rgba(0,140,199,0.9); color: #fff;
+  pointer-events: none;
+}
+

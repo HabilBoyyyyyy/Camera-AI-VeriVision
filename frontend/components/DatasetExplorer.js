@@ -1,7 +1,8 @@
 "use client";
 
 import {useState, useEffect, useRef} from "react";
-import {fetchDatasetImages, deleteDatasetImage, addImagesToDataset} from "@/lib/api";
+import {fetchDatasetImages, deleteDatasetImage, addImagesToDataset, hasAnnotations} from "@/lib/api";
+import ImageLabeler from "@/components/ImageLabeler";
 
 export default function DatasetExplorer({datasetId, onUpdate}) {
   const [images, setImages] = useState([]);
@@ -10,12 +11,23 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Labeler state
+  const [labelerTarget, setLabelerTarget] = useState(null); // {url, filename}
+  const [annotMap, setAnnotMap] = useState({});              // filename → boolean
+
   useEffect(() => { loadImages(); }, [datasetId]);
 
   const loadImages = async () => {
     try {
       const data = await fetchDatasetImages(datasetId);
-      setImages((data || []).map(d => ({...d, filename: d.filename.replace(/\\/g, "/")})));
+      const normalized = (data || []).map(d => ({...d, filename: d.filename.replace(/\\/g, "/")}));
+      setImages(normalized);
+      // Check annotations for each image
+      const map = {};
+      normalized.forEach(img => {
+        map[img.filename] = hasAnnotations(datasetId, img.filename);
+      });
+      setAnnotMap(map);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -76,113 +88,160 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
   const navigateDown = (name) => setCurrentPath(p => p ? p + name + "/" : name + "/");
 
   return (
-    <div className="mt-3 vv-card overflow-hidden">
-      {/* Breadcrumb / Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
-        <div className="flex items-center gap-2 min-w-0">
-          <button
-            onClick={navigateUp}
-            disabled={!currentPath}
-            title="Go up"
-            className="p-1.5 rounded border disabled:opacity-30 transition-colors"
-            style={{color:"var(--clr-text-sub)", borderColor:"var(--clr-border)"}}
-            onMouseEnter={e => { if (currentPath) { e.currentTarget.style.background="var(--clr-surface-mid)"; e.currentTarget.style.color="var(--clr-text)"; }}}
-            onMouseLeave={e => { e.currentTarget.style.background=""; e.currentTarget.style.color="var(--clr-text-sub)"; }}
-          >
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-          </button>
-          <div className="flex items-center gap-1 text-xs font-mono min-w-0 overflow-hidden">
-            <span className="font-bold shrink-0" style={{color:"var(--clr-accent)"}}>root/</span>
-            {currentPath && <span className="truncate" style={{color:"var(--clr-text-sub)"}}>{currentPath}</span>}
+    <>
+      <div className="mt-3 vv-card overflow-hidden">
+        {/* Breadcrumb / Toolbar */}
+        <div className="flex items-center justify-between px-4 py-2.5" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={navigateUp}
+              disabled={!currentPath}
+              title="Go up"
+              className="p-1.5 rounded border disabled:opacity-30 transition-colors"
+              style={{color:"var(--clr-text-sub)", borderColor:"var(--clr-border)"}}
+              onMouseEnter={e => { if (currentPath) { e.currentTarget.style.background="var(--clr-surface-mid)"; e.currentTarget.style.color="var(--clr-text)"; }}}
+              onMouseLeave={e => { e.currentTarget.style.background=""; e.currentTarget.style.color="var(--clr-text-sub)"; }}
+            >
+              <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            </button>
+            <div className="flex items-center gap-1 text-xs font-mono min-w-0 overflow-hidden">
+              <span className="font-bold shrink-0" style={{color:"var(--clr-accent)"}}>root/</span>
+              {currentPath && <span className="truncate" style={{color:"var(--clr-text-sub)"}}>{currentPath}</span>}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <input
+              type="file" multiple accept="image/*,.zip"
+              ref={fileInputRef} className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="btn-outline text-xs py-1.5 px-3 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[15px]">{isUploading ? "hourglass_top" : "upload"}</span>
+              {isUploading ? "Uploading…" : "Upload Here"}
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <input
-            type="file" multiple accept="image/*,.zip"
-            ref={fileInputRef} className="hidden"
-            onChange={handleFileChange}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="btn-outline text-xs py-1.5 px-3 disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-[15px]">{isUploading ? "hourglass_top" : "upload"}</span>
-            {isUploading ? "Uploading…" : "Upload Here"}
-          </button>
-        </div>
-      </div>
-
-      {/* File Grid */}
-      <div className="p-4 max-h-96 overflow-y-auto" style={{background:"var(--clr-surface)"}}>
-        {folderList.length === 0 && currentFiles.length === 0 ? (
-          <div className="text-center py-8 text-xs" style={{color:"var(--clr-text-muted)"}}>
-            <span className="material-symbols-outlined text-[32px] block mb-2" style={{opacity:0.4}}>folder_open</span>
-            Empty directory
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
-            {/* Folders */}
-            {folderList.map(f => (
-              <div
-                key={f}
-                onClick={() => navigateDown(f)}
-                className="flex flex-col items-center justify-center p-3 rounded border cursor-pointer transition-all group"
-                style={{background:"var(--clr-surface-low)", borderColor:"var(--clr-border)"}}
-                onMouseEnter={e => { e.currentTarget.style.borderColor="var(--clr-accent)"; e.currentTarget.style.background="var(--clr-surface-mid)"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor="var(--clr-border)"; e.currentTarget.style.background="var(--clr-surface-low)"; }}
-              >
-                <span className="material-symbols-outlined text-[36px] mb-1.5 transition-transform group-hover:scale-110"
-                  style={{color:"var(--clr-warn)", fontVariationSettings:"'FILL' 1"}}>folder</span>
-                <span className="text-[10px] font-semibold text-center truncate w-full" style={{color:"var(--clr-text-sub)"}}>{f}</span>
-              </div>
-            ))}
-
-            {/* Image Files */}
-            {currentFiles.map((file, idx) => (
-              <div key={idx} className="group flex flex-col rounded overflow-hidden border relative"
-                style={{borderColor:"var(--clr-border)", background:"var(--clr-surface-low)"}}>
-                {/* Delete */}
-                <button
-                  onClick={(e) => handleDelete(file.filename, e)}
-                  title="Delete image"
-                  className="absolute top-1 right-1 z-20 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{background:"var(--clr-error)", color:"#fff"}}
+        {/* File Grid */}
+        <div className="p-4 max-h-96 overflow-y-auto" style={{background:"var(--clr-surface)"}}>
+          {folderList.length === 0 && currentFiles.length === 0 ? (
+            <div className="text-center py-8 text-xs" style={{color:"var(--clr-text-muted)"}}>
+              <span className="material-symbols-outlined text-[32px] block mb-2" style={{opacity:0.4}}>folder_open</span>
+              Empty directory
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {/* Folders */}
+              {folderList.map(f => (
+                <div
+                  key={f}
+                  onClick={() => navigateDown(f)}
+                  className="flex flex-col items-center justify-center p-3 rounded border cursor-pointer transition-all group"
+                  style={{background:"var(--clr-surface-low)", borderColor:"var(--clr-border)"}}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor="var(--clr-accent)"; e.currentTarget.style.background="var(--clr-surface-mid)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor="var(--clr-border)"; e.currentTarget.style.background="var(--clr-surface-low)"; }}
                 >
-                  <span className="material-symbols-outlined text-[14px]">delete</span>
-                </button>
+                  <span className="material-symbols-outlined text-[36px] mb-1.5 transition-transform group-hover:scale-110"
+                    style={{color:"var(--clr-warn)", fontVariationSettings:"'FILL' 1"}}>folder</span>
+                  <span className="text-[10px] font-semibold text-center truncate w-full" style={{color:"var(--clr-text-sub)"}}>{f}</span>
+                </div>
+              ))}
 
-                {/* Image */}
-                <div className="w-full aspect-square relative overflow-hidden" style={{background:"var(--clr-surface-mid)"}}>
-                  <img
-                    src={`http://localhost:8000${file.url}`}
-                    alt={file.filename}
-                    className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
-                    loading="lazy"
-                  />
-                  <a
-                    href={`http://localhost:8000${file.url}`}
-                    target="_blank" rel="noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{background:"rgba(0,0,0,.5)"}}
+              {/* Image Files */}
+              {currentFiles.map((file, idx) => (
+                <div key={idx} className="group flex flex-col rounded overflow-hidden border relative"
+                  style={{borderColor:"var(--clr-border)", background:"var(--clr-surface-low)"}}>
+
+                  {/* Annotation badge */}
+                  {annotMap[file.filename] && (
+                    <div className="annot-badge">
+                      <span className="material-symbols-outlined" style={{fontSize: 10}}>label</span>
+                      Labeled
+                    </div>
+                  )}
+
+                  {/* Delete */}
+                  <button
+                    onClick={(e) => handleDelete(file.filename, e)}
+                    title="Delete image"
+                    className="absolute top-1 right-1 z-20 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{background:"var(--clr-error)", color:"#fff"}}
                   >
-                    <span className="btn-primary text-[10px] px-2 py-1">View</span>
-                  </a>
-                </div>
+                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                  </button>
 
-                {/* Name */}
-                <div className="px-2 py-1.5" style={{background:"var(--clr-surface-low)"}}>
-                  <span className="text-[9px] font-mono truncate block w-full" style={{color:"var(--clr-text-muted)"}}>
-                    {file.filename.split("/").pop()}
-                  </span>
+                  {/* Image */}
+                  <div className="w-full aspect-square relative overflow-hidden" style={{background:"var(--clr-surface-mid)"}}>
+                    <img
+                      src={`http://localhost:8000${file.url}`}
+                      alt={file.filename}
+                      className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
+                      loading="lazy"
+                    />
+                    {/* Hover overlay with View + Label buttons */}
+                    <div
+                      className="absolute inset-0 z-10 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{background:"rgba(0,0,0,.55)"}}
+                    >
+                      <a
+                        href={`http://localhost:8000${file.url}`}
+                        target="_blank" rel="noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="btn-primary text-[10px] px-2 py-1"
+                      >
+                        View
+                      </a>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLabelerTarget({
+                            url: `http://localhost:8000${file.url}`,
+                            filename: file.filename,
+                          });
+                        }}
+                        className="btn-primary text-[10px] px-2 py-1"
+                        style={{background: "var(--clr-accent)"}}
+                      >
+                        <span className="material-symbols-outlined" style={{fontSize: 12}}>edit</span>
+                        Label
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Name */}
+                  <div className="px-2 py-1.5" style={{background:"var(--clr-surface-low)"}}>
+                    <span className="text-[9px] font-mono truncate block w-full" style={{color:"var(--clr-text-muted)"}}>
+                      {file.filename.split("/").pop()}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Image Labeler modal */}
+      {labelerTarget && (
+        <ImageLabeler
+          imageUrl={labelerTarget.url}
+          filename={labelerTarget.filename}
+          datasetId={datasetId}
+          onClose={() => setLabelerTarget(null)}
+          onSaved={() => {
+            // Refresh annotation badges
+            const map = {...annotMap};
+            map[labelerTarget.filename] = true;
+            setAnnotMap(map);
+            setLabelerTarget(null);
+          }}
+        />
+      )}
+    </>
   );
 }

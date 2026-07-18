@@ -89,7 +89,7 @@ export default function RootLayout({children}) {
         <title>VERIVISION — Industrial AI Platform</title>
         <meta name="description" content="Industrial AI-powered visual inspection for quality control" />
       </head>
-      <body style={{background:"var(--clr-bg)", color:"var(--clr-text)", minHeight:"100vh"}}>
+      <body suppressHydrationWarning style={{background:"var(--clr-bg)", color:"var(--clr-text)", minHeight:"100vh"}}>
         <AuthProvider>
           <ThemeProvider>
             {(dark, toggleDark) => (

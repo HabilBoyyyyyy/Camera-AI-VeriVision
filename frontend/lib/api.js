@@ -104,6 +104,22 @@ export async function deleteDataset(id) {
   return apiDelete(`/api/datasets/${id}`);
 }
 
+export async function createDataset(name, taskType) {
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("task_type", taskType);
+  const res = await fetch(`${BASE_URL}/api/datasets/create`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Create failed' }));
+    throw new Error(err.detail || 'Create failed');
+  }
+  return res.json();
+}
+
 
 export async function deleteDatasetImage(datasetId, filename) {
   return apiDelete(`/api/datasets/${datasetId}/images/${encodeURIComponent(filename)}`);
@@ -217,4 +233,58 @@ export async function fetchAlerts() {
 // ─── Chatbot ──────────────────────────────────────
 export async function sendChatMessage(message) {
   return apiPost('/api/chat/', { message });
+}
+
+// ─── Annotations (localStorage fallback) ──────────
+const ANNOT_KEY = "vv-annotations";
+
+function _getAnnotStore() {
+  try { return JSON.parse(localStorage.getItem(ANNOT_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+export async function saveAnnotations(datasetId, filename, annotations) {
+  const store = _getAnnotStore();
+  const key = `${datasetId}::${filename}`;
+  store[key] = { annotations, updatedAt: new Date().toISOString() };
+  localStorage.setItem(ANNOT_KEY, JSON.stringify(store));
+  return { status: "saved", count: annotations.length };
+}
+
+export async function fetchAnnotations(datasetId, filename) {
+  const store = _getAnnotStore();
+  const key = `${datasetId}::${filename}`;
+  return store[key]?.annotations || [];
+}
+
+export function hasAnnotations(datasetId, filename) {
+  const store = _getAnnotStore();
+  const key = `${datasetId}::${filename}`;
+  return (store[key]?.annotations?.length || 0) > 0;
+}
+
+export function exportAnnotationsYOLO(annotations, imgWidth, imgHeight, classNames) {
+  return annotations.map(a => {
+    const clsIdx = classNames.indexOf(a.label);
+    if (a.type === "box") {
+      const cx = (a.x + a.w / 2) / imgWidth;
+      const cy = (a.y + a.h / 2) / imgHeight;
+      const nw = a.w / imgWidth;
+      const nh = a.h / imgHeight;
+      return `${clsIdx} ${cx.toFixed(6)} ${cy.toFixed(6)} ${nw.toFixed(6)} ${nh.toFixed(6)}`;
+    }
+    // polygon → bounding box fallback for YOLO
+    if (a.type === "polygon" && a.points?.length >= 3) {
+      const xs = a.points.map(p => p.x);
+      const ys = a.points.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const cx = (minX + maxX) / 2 / imgWidth;
+      const cy = (minY + maxY) / 2 / imgHeight;
+      const nw = (maxX - minX) / imgWidth;
+      const nh = (maxY - minY) / imgHeight;
+      return `${clsIdx} ${cx.toFixed(6)} ${cy.toFixed(6)} ${nw.toFixed(6)} ${nh.toFixed(6)}`;
+    }
+    return null;
+  }).filter(Boolean).join("\n");
 }
