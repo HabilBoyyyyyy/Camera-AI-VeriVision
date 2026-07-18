@@ -109,6 +109,10 @@ def delete_model(
     if not confirm:
         raise HTTPException(status_code=400, detail="Pass ?confirm=true to confirm deletion")
     
+    # Manually delete dependent records to avoid IntegrityError
+    db.query(models.TrainingJob).filter(models.TrainingJob.model_id == model_id).delete(synchronize_session=False)
+    db.query(models.InspectionResult).filter(models.InspectionResult.model_id == model_id).delete(synchronize_session=False)
+    
     # Delete weights file
     if m.weights_path and os.path.exists(m.weights_path):
         import shutil

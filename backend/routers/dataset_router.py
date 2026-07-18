@@ -125,6 +125,13 @@ def delete_dataset(
     if not ds:
         raise HTTPException(status_code=404, detail="Dataset not found")
     
+    # Check if dataset has associated models. Deleting models might be dangerous.
+    associated_models = db.query(models.TrainedModel).filter(models.TrainedModel.dataset_id == dataset_id).count()
+    if associated_models > 0:
+        raise HTTPException(status_code=400, detail=f"Cannot delete dataset. It is used by {associated_models} trained model(s). Please delete the models first.")
+        
+    db.query(models.TrainingJob).filter(models.TrainingJob.dataset_id == dataset_id).delete(synchronize_session=False)
+    
     # Delete files
     if ds.folder_path and os.path.exists(ds.folder_path):
         shutil.rmtree(ds.folder_path, ignore_errors=True)

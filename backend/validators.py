@@ -149,17 +149,34 @@ def validate_detection_dataset(dest_dir: Path) -> ValidationResult:
     root = _find_root(dest_dir)
     result = ValidationResult(valid=True)
     
-    required = ["images/train", "images/valid", "labels/train", "labels/valid", "data.yaml"]
-    for rel in required:
-        if not (root / rel).exists():
-            result.errors.append(f"Missing required path: {rel}")
-    if result.errors:
+    if not (root / "data.yaml").exists():
+        result.errors.append("Missing required file: data.yaml")
+        result.valid = False
+        return result
+        
+    # Check which structure is being used
+    structure_a = ["images/train", "images/valid", "labels/train", "labels/valid"]
+    structure_b = ["train/images", "valid/images", "train/labels", "valid/labels"]
+    
+    is_a = all((root / rel).exists() for rel in structure_a)
+    is_b = all((root / rel).exists() for rel in structure_b)
+    
+    if is_a:
+        train_img_dir = root / "images/train"
+        valid_img_dir = root / "images/valid"
+        train_lbl_dir = root / "labels/train"
+    elif is_b:
+        train_img_dir = root / "train/images"
+        valid_img_dir = root / "valid/images"
+        train_lbl_dir = root / "train/labels"
+    else:
+        result.errors.append("Dataset must contain either 'images/train & labels/train' OR 'train/images & train/labels'.")
         result.valid = False
         return result
     
-    train_images = [f for f in (root / "images/train").iterdir() if f.suffix.lower() in IMG_EXTS]
-    valid_images = [f for f in (root / "images/valid").iterdir() if f.suffix.lower() in IMG_EXTS]
-    train_labels = list((root / "labels/train").glob("*.txt"))
+    train_images = [f for f in train_img_dir.iterdir() if f.suffix.lower() in IMG_EXTS]
+    valid_images = [f for f in valid_img_dir.iterdir() if f.suffix.lower() in IMG_EXTS]
+    train_labels = list(train_lbl_dir.glob("*.txt"))
     
     image_stems = {f.stem for f in train_images}
     label_stems = {f.stem for f in train_labels}
@@ -168,7 +185,7 @@ def validate_detection_dataset(dest_dir: Path) -> ValidationResult:
         result.warnings.append(f"{len(unlabeled)} training images have no matching label file.")
     
     if not train_images:
-        result.errors.append("'images/train' contains no valid images.")
+        result.errors.append("Training images folder contains no valid images.")
     
     total_images = len(train_images) + len(valid_images)
     result.summary = {
