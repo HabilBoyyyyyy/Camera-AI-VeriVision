@@ -62,16 +62,25 @@ function SettingsContent({dark, toggleDark}) {
           label: "Dark Mode",
           description: "Toggle between light and dark interface theme",
           control: (
-            <button
-              onClick={toggleDark}
-              className="relative inline-flex items-center w-11 h-6 rounded-full transition-colors duration-200"
-              style={{background: dark ? "var(--clr-accent)" : "var(--clr-surface-high)"}}
-            >
-              <span
-                className="inline-block w-4 h-4 rounded-full bg-white shadow transition-transform duration-200"
-                style={{transform: dark ? "translateX(22px)" : "translateX(2px)"}}
-              />
-            </button>
+            <div className="w-48 aspect-video rounded-xl has-[:checked]:bg-[#3a3347] bg-[#ebe6ef] border-4 border-[#121331] scale-[0.3] origin-right -my-8">
+              <div className="flex h-full w-full px-2 items-center gap-x-2">
+                <div className="w-6 h-6 flex-shrink-0 rounded-full border-4 border-[#121331]"></div>
+                <label
+                  htmlFor="switch"
+                  className="has-[:checked]:scale-x-[-1] w-full h-10 border-4 border-[#121331] rounded cursor-pointer"
+                >
+                  <input type="checkbox" id="switch" className="hidden" checked={dark} onChange={toggleDark} />
+                  <div className="w-full h-full bg-[#3b82f6] relative">
+                    <div className="w-0 h-0 z-20 border-l-[24px] border-l-transparent border-r-[24px] border-r-transparent border-t-[20px] border-t-[#121331] relative">
+                      <div className="w-0 h-0 absolute border-l-[18px] border-l-transparent border-r-[18px] border-r-transparent border-t-[15px] border-t-[#2563eb] -top-5 -left-[18px]"></div>
+                    </div>
+                    <div className="w-[24px] h-9 z-10 absolute top-[9px] left-0 bg-[#3b82f6] border-r-2 border-b-4 border-[#121331] transform skew-y-[39deg]"></div>
+                    <div className="w-[25px] h-9 z-10 absolute top-[9px] left-[24px] bg-[#1d4ed8] border-r-4 border-l-2 border-b-4 border-[#121331] transform skew-y-[-39deg]"></div>
+                  </div>
+                </label>
+                <div className="w-6 h-1 flex-shrink-0 bg-[#121331] rounded-full"></div>
+              </div>
+            </div>
           ),
         },
       ],
@@ -256,7 +265,23 @@ export default function Header({onMenuToggle, dark, toggleDark}) {
         {/* Right */}
         <div className="flex items-center gap-1">
           {/* Dark mode */}
-          {iconBtn(dark ? "Light mode" : "Dark mode", dark ? "light_mode" : "dark_mode", toggleDark)}
+          <div className="w-12 h-8 flex items-center justify-center relative cursor-pointer" onClick={toggleDark}>
+            <div className={`w-48 aspect-video rounded-xl ${dark ? "bg-[#3a3347]" : "bg-[#ebe6ef]"} border-4 border-[#121331] absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 scale-[0.25] pointer-events-none transition-colors`}>
+              <div className="flex h-full w-full px-2 items-center gap-x-2">
+                <div className="w-6 h-6 flex-shrink-0 rounded-full border-4 border-[#121331]"></div>
+                <div className={`w-full h-10 border-4 border-[#121331] rounded ${dark ? "scale-x-[-1]" : ""} transition-transform`}>
+                  <div className="w-full h-full bg-[#3b82f6] relative">
+                    <div className="w-0 h-0 z-20 border-l-[24px] border-l-transparent border-r-[24px] border-r-transparent border-t-[20px] border-t-[#121331] relative">
+                      <div className="w-0 h-0 absolute border-l-[18px] border-l-transparent border-r-[18px] border-r-transparent border-t-[15px] border-t-[#2563eb] -top-5 -left-[18px]"></div>
+                    </div>
+                    <div className="w-[24px] h-9 z-10 absolute top-[9px] left-0 bg-[#3b82f6] border-r-2 border-b-4 border-[#121331] transform skew-y-[39deg]"></div>
+                    <div className="w-[25px] h-9 z-10 absolute top-[9px] left-[24px] bg-[#1d4ed8] border-r-4 border-l-2 border-b-4 border-[#121331] transform skew-y-[-39deg]"></div>
+                  </div>
+                </div>
+                <div className="w-6 h-1 flex-shrink-0 bg-[#121331] rounded-full"></div>
+              </div>
+            </div>
+          </div>
 
           {/* Settings */}
           {iconBtn("System Settings", "settings", () => setShowSettings(true))}
