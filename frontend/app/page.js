@@ -6,7 +6,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import {fetchDashboardSummary, getTrainingHistory} from "@/lib/api";
+import {fetchDashboardSummary, getTrainingHistory, fetchAlerts} from "@/lib/api";
 import {useAuth} from "@/lib/AuthContext";
 import TrainingMonitor from "@/components/TrainingMonitor";
 
@@ -56,17 +56,22 @@ function CustomPieTooltip({active, payload}) {
 
 export default function DashboardPage() {
   const [summary, setSummary] = useState(null);
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeJobId, setActiveJobId] = useState(null);
   const {user} = useAuth();
 
   const loadDashboard = async () => {
     try {
-      const [data, history] = await Promise.all([
+      const [data, history, alertsData] = await Promise.all([
         fetchDashboardSummary(),
         getTrainingHistory().catch(() => []),
+        fetchAlerts().catch(() => ({ alerts: [] })),
       ]);
       setSummary(data);
+      if (alertsData && alertsData.alerts) {
+        setAlerts(alertsData.alerts.slice(0, 3));
+      }
       const active = (history || []).find(j => j.status === "training" || j.status === "queued");
       setActiveJobId(active?.job_id || null);
     } catch (e) { console.error(e); }
@@ -76,10 +81,10 @@ export default function DashboardPage() {
   useEffect(() => { loadDashboard(); }, []);
 
   const statCards = summary ? [
-    {label:"Total Scans (24h)", value: summary.inspections_today?.toLocaleString() ?? "0", icon:"qr_code_scanner", sub:"+12.4% vs prev",        subIcon:"trending_up",   subOk:true},
-    {label:"Defect Rate",       value: `${summary.total_datasets ?? 0}`,                   icon:"troubleshoot",  sub:"Active datasets",           subIcon:"database",      subOk:false},
-    {label:"Active Models",     value: summary.trained_models ?? 0,                         icon:"memory",        sub:"All nominal",               subIcon:"check_circle",  subOk:false},
-    {label:"System Uptime",     value: "99.98%",                                             icon:"dns",           sub:"Last incident 42d ago",     subIcon:"schedule",      subOk:false},
+    {label:"Total Scans (24h)", value: summary.inspections_today?.toLocaleString() ?? "0", icon:"qr_code_scanner", sub: summary.scans_change_pct || "+0.0% vs prev", subIcon:"trending_up", subOk:true},
+    {label:"Defect Rate",       value: `${summary.total_datasets ?? 0}`,                   icon:"troubleshoot",  sub:"Active datasets", subIcon:"database", subOk:false},
+    {label:"Active Models",     value: summary.trained_models ?? 0,                         icon:"memory",        sub:"All nominal", subIcon:"check_circle", subOk:false},
+    {label:"System Uptime",     value: summary.uptime_str || "Up 0m",                        icon:"dns",           sub:"Running smoothly", subIcon:"schedule", subOk:false},
   ] : [];
 
   const YIELD_COLORS = {OK:"#2e7d32", NG:"#ba1a1a", Uncertain:"#e65100"};
@@ -162,23 +167,25 @@ export default function DashboardPage() {
             <h3 className="text-base font-semibold" style={{color:"var(--clr-text)"}}>Recent Alerts</h3>
           </div>
           <div className="flex-1 overflow-y-auto divide-y" style={{divideColor:"var(--clr-border)"}}>
-            {[
-              {icon:"error",   iconColor:"var(--clr-error)",   title:"Micro-fracture detected", sub:"Part #AX-992. Confidence: 92%", time:"10:42:01 AM"},
-              {icon:"info",    iconColor:"var(--clr-accent)",  title:"Model drift warning",     sub:"Lighting anomaly on Line Beta.", time:"09:15:33 AM"},
-              {icon:"warning", iconColor:"var(--clr-warn)",    title:"High latency alert",      sub:"Inference time > 150ms.",       time:"Yesterday"},
-            ].map((a, i) => (
+            {alerts.length > 0 ? alerts.map((a, i) => (
               <div key={i} className="p-4 flex gap-3 items-start cursor-pointer transition-colors" style={{borderBottom:"1px solid var(--clr-border)"}}
                 onMouseEnter={e => e.currentTarget.style.background="var(--clr-surface-low)"}
                 onMouseLeave={e => e.currentTarget.style.background=""}
               >
-                <span className="material-symbols-outlined mt-0.5 text-[22px]" style={{color:a.iconColor, fontVariationSettings:"'FILL' 1"}}>{a.icon}</span>
+                <span className="material-symbols-outlined mt-0.5 text-[22px]" style={{color: a.severity === "critical" ? "var(--clr-error)" : a.severity === "warning" ? "var(--clr-warn)" : "var(--clr-accent)", fontVariationSettings:"'FILL' 1"}}>
+                  {a.icon === "flame" ? "local_fire_department" : a.icon === "trending-down" ? "trending_down" : a.icon === "alert-triangle" ? "warning" : "info"}
+                </span>
                 <div>
                   <div className="text-sm font-semibold" style={{color:"var(--clr-text)"}}>{a.title}</div>
-                  <div className="text-xs mt-0.5" style={{color:"var(--clr-text-sub)"}}>{a.sub}</div>
-                  <div className="text-[11px] mt-1" style={{color:"var(--clr-text-muted)"}}>{a.time}</div>
+                  <div className="text-xs mt-0.5 line-clamp-2" style={{color:"var(--clr-text-sub)"}}>{a.message}</div>
+                  <div className="text-[11px] mt-1" style={{color:"var(--clr-text-muted)"}}>Recently</div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="p-6 text-center text-xs text-[#8a93a3]">
+                No recent alerts. System is stable.
+              </div>
+            )}
           </div>
           <div className="p-3 shrink-0" style={{borderTop:"1px solid var(--clr-border)"}}>
             <Link href="/alerts">
@@ -256,9 +263,49 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Model Performance Table */}
-      <div className="vv-card overflow-hidden">
-        <div className="p-4 flex justify-between items-center" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+      {/* Recent Fails & Model Performance Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 stagger-5">
+        {/* Recent Fails (NG) Gallery */}
+        {summary?.recent_ng_parts?.length > 0 ? (
+          <div className="vv-card overflow-hidden">
+            <div className="p-4 flex justify-between items-center" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+              <div>
+                <h3 className="text-base font-semibold uppercase tracking-wider" style={{color:"var(--clr-text)"}}>Recent Fails</h3>
+                <p className="text-xs mt-0.5" style={{color:"var(--clr-text-sub)"}}>Latest NG parts detected</p>
+              </div>
+            <Link href="/results?verdict=NG" className="text-xs font-bold hover:underline" style={{color:"var(--clr-accent)"}}>
+              View All →
+            </Link>
+          </div>
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 gap-3">
+            {summary.recent_ng_parts.slice(0, 8).map((ng, i) => (
+              <Link key={i} href={`/results?search_id=${ng.id}`}>
+                <div className="relative aspect-square rounded-lg overflow-hidden border border-[#2b313a] group cursor-pointer bg-[#14171c]">
+                  {ng.image_path ? (
+                    <img src={`${BASE_URL}${ng.image_path}`} alt="NG Part" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center">
+                      <span className="material-symbols-outlined text-[28px] text-[#3a4149]">image_not_supported</span>
+                    </div>
+                  )}
+                  <div className="absolute top-1.5 right-1.5 bg-[#ba1a1a] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow">
+                    NG
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+        ) : (
+          <div className="vv-card overflow-hidden flex flex-col items-center justify-center p-6 text-center text-xs" style={{color:"var(--clr-text-muted)"}}>
+            <span className="material-symbols-outlined text-[48px] block mb-3 opacity-30">verified</span>
+            No recent fails detected.
+          </div>
+        )}
+
+        {/* Model Performance Table */}
+        <div className="vv-card overflow-hidden">
+          <div className="p-4 flex justify-between items-center" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
           <h3 className="text-base font-semibold" style={{color:"var(--clr-text)"}}>Model Performance (Active)</h3>
           <Link href="/models">
             <button className="btn-outline text-xs py-1.5 px-3">View All Models</button>
@@ -306,6 +353,7 @@ export default function DashboardPage() {
               ))}
             </tbody>
           </table>
+        </div>
         </div>
       </div>
     </div>

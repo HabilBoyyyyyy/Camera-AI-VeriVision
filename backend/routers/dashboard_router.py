@@ -6,6 +6,10 @@ from database import get_db
 import models
 import json
 import os
+import time
+import math
+
+START_TIME = time.time()
 
 from auth import get_current_user
 
@@ -25,6 +29,25 @@ def get_summary(db: Session = Depends(get_db), user: models.User = Depends(get_c
     inspections_today = db.query(models.InspectionResult).filter(
         models.InspectionResult.created_at >= today_start
     ).count()
+
+    yesterday_start = today_start - timedelta(days=1)
+    inspections_yesterday = db.query(models.InspectionResult).filter(
+        models.InspectionResult.created_at >= yesterday_start,
+        models.InspectionResult.created_at < today_start
+    ).count()
+    
+    if inspections_yesterday > 0:
+        pct_change = ((inspections_today - inspections_yesterday) / inspections_yesterday) * 100
+        scans_change_pct = f"+{pct_change:.1f}% vs prev" if pct_change > 0 else f"{pct_change:.1f}% vs prev"
+    else:
+        scans_change_pct = f"+{inspections_today * 100}% vs prev" if inspections_today > 0 else "0% vs prev"
+        
+    uptime_seconds = time.time() - START_TIME
+    days = int(uptime_seconds // 86400)
+    hours = int((uptime_seconds % 86400) // 3600)
+    minutes = int((uptime_seconds % 3600) // 60)
+    
+    uptime_str = f"Up {days}d {hours}h" if days > 0 else (f"Up {hours}h {minutes}m" if hours > 0 else f"Up {minutes}m")
 
     # ── Today's yield breakdown ───────────────────────────────────────────────
     today_results = db.query(
@@ -151,6 +174,8 @@ def get_summary(db: Session = Depends(get_db), user: models.User = Depends(get_c
         "total_datasets": total_datasets,
         "trained_models": trained_models_count,
         "inspections_today": inspections_today,
+        "scans_change_pct": scans_change_pct,
+        "uptime_str": uptime_str,
         "today_yield": today_yield,
         "weekly_volume": weekly_volume,
         "recent_ng_parts": recent_ng_parts,

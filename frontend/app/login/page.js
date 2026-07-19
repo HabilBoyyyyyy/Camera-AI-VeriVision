@@ -72,7 +72,7 @@ export default function LoginPage() {
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4 relative transition-colors duration-300"
       style={{
-        background: bg,
+        backgroundColor: bg,
         backgroundImage: dark
           ? `linear-gradient(rgba(56,139,253,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(56,139,253,.05) 1px, transparent 1px)`
           : `linear-gradient(rgba(56,139,253,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(56,139,253,.04) 1px, transparent 1px)`,

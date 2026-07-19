@@ -461,20 +461,20 @@ export default function ResultsPage() {
                                       ) : (
                                         <span className="material-symbols-outlined text-[16px]">check_circle</span>
                                       )}
-                                      Mark as OK
+                                      {r.verdict === "OK" ? "Confirm Pass" : "Mark as Pass"}
                                     </button>
                                     <button
                                       onClick={() => handleReview(r.id, "NG")}
                                       disabled={reviewing === r.id}
                                       className="btn-primary flex-1 justify-center text-xs py-2"
-                                      style={{background:"var(--clr-error)"}}
+                                      style={{background:"var(--clr-error)", textTransform:"none", letterSpacing:"normal"}}
                                     >
                                       {reviewing === r.id ? (
                                         <span className="material-symbols-outlined text-[16px] animate-spin">hourglass_top</span>
                                       ) : (
                                         <span className="material-symbols-outlined text-[16px]">report</span>
                                       )}
-                                      Confirm NG
+                                      {r.verdict === "NG" ? "Confirm Fail" : "Mark as Fail"}
                                     </button>
                                   </div>
                                   <p className="text-[10px] mt-2" style={{color:"var(--clr-text-muted)"}}>
