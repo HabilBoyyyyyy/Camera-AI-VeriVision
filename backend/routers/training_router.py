@@ -125,21 +125,43 @@ def _train_classification(job_id, dataset_path, output_dir, architecture, epochs
         # Extract train loss
         train_loss = 0.0
         if hasattr(trainer, 'loss'):
-            # It might be a tensor or float
             train_loss = float(trainer.loss.sum().item()) if hasattr(trainer.loss, 'sum') else float(trainer.loss)
             
         metrics_dict = {}
         if hasattr(trainer, 'metrics') and isinstance(trainer.metrics, dict):
             metrics_dict = {k: float(v) for k, v in trainer.metrics.items()}
+        
+        # Extract accuracy from YOLO classification metrics
+        # YOLO cls reports: metrics/accuracy_top1, metrics/accuracy_top5
+        val_accuracy = (
+            metrics_dict.get("metrics/accuracy_top1")
+            or metrics_dict.get("top1_acc")
+            or metrics_dict.get("accuracy_top1")
+        )
+        val_top5 = (
+            metrics_dict.get("metrics/accuracy_top5")
+            or metrics_dict.get("top5_acc")
+            or metrics_dict.get("accuracy_top5")
+        )
             
         hist_entry = {
             "epoch": current_epoch,
             "train_loss": train_loss,
-            "metrics": metrics_dict
+            "metrics": metrics_dict,
         }
+        if val_accuracy is not None:
+            hist_entry["val_accuracy"] = val_accuracy
+        if val_top5 is not None:
+            hist_entry["val_top5"] = val_top5
         
         if job_id in _job_progress:
             _job_progress[job_id]["epoch"] = current_epoch
+            _job_progress[job_id]["loss"] = train_loss
+            if val_accuracy is not None:
+                _job_progress[job_id]["accuracy"] = val_accuracy
+                _job_progress[job_id]["val_accuracy"] = val_accuracy
+            if val_top5 is not None:
+                _job_progress[job_id]["val_top5"] = val_top5
             if "epochs_history" not in _job_progress[job_id]:
                 _job_progress[job_id]["epochs_history"] = []
             _job_progress[job_id]["epochs_history"].append(hist_entry)
@@ -191,15 +213,42 @@ def _train_detection(job_id, dataset_path, output_dir, architecture, epochs,
         metrics_dict = {}
         if hasattr(trainer, 'metrics') and isinstance(trainer.metrics, dict):
             metrics_dict = {k: float(v) for k, v in trainer.metrics.items()}
+        
+        # Extract detection accuracy (mAP50, mAP50-95)
+        val_accuracy = (
+            metrics_dict.get("metrics/mAP50(B)")
+            or metrics_dict.get("metrics/mAP50")
+            or metrics_dict.get("mAP50")
+        )
+        val_map95 = (
+            metrics_dict.get("metrics/mAP50-95(B)")
+            or metrics_dict.get("metrics/mAP50-95")
+            or metrics_dict.get("mAP50-95")
+        )
+        # Detection val loss (box + cls + dfl)
+        val_loss = None
+        vbox = metrics_dict.get("val/box_loss")
+        vcls = metrics_dict.get("val/cls_loss")
+        vdfl = metrics_dict.get("val/dfl_loss")
+        if vbox is not None and vcls is not None and vdfl is not None:
+            val_loss = vbox + vcls + vdfl
             
         hist_entry = {
             "epoch": current_epoch,
             "train_loss": train_loss,
-            "metrics": metrics_dict
+            "metrics": metrics_dict,
         }
+        if val_accuracy is not None:
+            hist_entry["val_accuracy"] = val_accuracy
+        if val_loss is not None:
+            hist_entry["val_loss"] = val_loss
         
         if job_id in _job_progress:
             _job_progress[job_id]["epoch"] = current_epoch
+            _job_progress[job_id]["loss"] = train_loss
+            if val_accuracy is not None:
+                _job_progress[job_id]["accuracy"] = val_accuracy
+                _job_progress[job_id]["val_accuracy"] = val_accuracy
             if "epochs_history" not in _job_progress[job_id]:
                 _job_progress[job_id]["epochs_history"] = []
             _job_progress[job_id]["epochs_history"].append(hist_entry)

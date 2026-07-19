@@ -69,4 +69,10 @@ class InspectionResult(Base):
     confidence = Column(Float, nullable=False)
     details_json = Column(Text, nullable=True)  # JSON of per-class predictions
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Manual review / validation fields
+    review_verdict = Column(String, nullable=True)  # OK or NG (human-validated)
+    review_notes = Column(Text, nullable=True)
+    reviewed_by = Column(String, nullable=True)  # username of reviewer
+    reviewed_at = Column(DateTime, nullable=True)
+    exported_to_dataset = Column(Boolean, default=False)  # image exported to training dataset?
     model = relationship("TrainedModel", back_populates="inspection_results")

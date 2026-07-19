@@ -1,7 +1,8 @@
 "use client";
 
 import {useState, useEffect} from "react";
-import {fetchResults, getResultsExportUrl, fetchModels, deleteResult} from "@/lib/api";
+import {fetchResults, getResultsExportUrl, fetchModels, deleteResult, submitReview, fetchFeedbackStats} from "@/lib/api";
+import Link from "next/link";
 
 const BASE_URL = "http://localhost:8000";
 
@@ -9,6 +10,12 @@ function VerdictBadge({verdict}) {
   if (verdict === "OK")  return <span className="badge badge-pass">✓ PASS</span>;
   if (verdict === "NG")  return <span className="badge badge-fail">✗ FAIL</span>;
   return <span className="badge badge-review">~ REVIEW</span>;
+}
+
+function ReviewBadge({reviewVerdict}) {
+  if (!reviewVerdict) return null;
+  if (reviewVerdict === "OK") return <span className="badge badge-pass" style={{fontSize:9, padding:"1px 6px"}}>✓ Validated OK</span>;
+  return <span className="badge badge-fail" style={{fontSize:9, padding:"1px 6px"}}>✗ Validated NG</span>;
 }
 
 function FilterLabel({children}) {
@@ -28,12 +35,18 @@ export default function ResultsPage() {
   const [loading,    setLoading]    = useState(true);
   const [expanded,   setExpanded]   = useState(null);
   const [filters,    setFilters]    = useState({
-    verdict:"", model_id:"", start_date:"", end_date:"", search_id:""
+    verdict:"", model_id:"", start_date:"", end_date:"", search_id:"", review_status:""
   });
   const limit = 20;
 
+  // Review state
+  const [reviewNotes, setReviewNotes] = useState({});  // {resultId: "notes"}
+  const [reviewing, setReviewing] = useState(null);    // resultId being submitted
+  const [feedbackStats, setFeedbackStats] = useState([]);
+
   useEffect(() => {
     fetchModels().then(d => setModelsList(d || [])).catch(() => {});
+    fetchFeedbackStats().then(d => setFeedbackStats(d || [])).catch(() => {});
   }, []);
 
   const load = async (pg = page, f = filters) => {
@@ -51,7 +64,7 @@ export default function ResultsPage() {
 
   const applyFilters = () => { setPage(1); load(1, filters); };
   const resetFilters = () => {
-    const blank = {verdict:"", model_id:"", start_date:"", end_date:"", search_id:""};
+    const blank = {verdict:"", model_id:"", start_date:"", end_date:"", search_id:"", review_status:""};
     setFilters(blank); setPage(1); load(1, blank);
   };
 
@@ -61,7 +74,28 @@ export default function ResultsPage() {
     catch(e) { alert("Failed to delete: " + e.message); }
   };
 
+  const handleReview = async (resultId, verdict) => {
+    setReviewing(resultId);
+    try {
+      const notes = reviewNotes[resultId] || "";
+      await submitReview(resultId, verdict, notes);
+      // Refresh data
+      await load();
+      // Refresh feedback stats
+      const stats = await fetchFeedbackStats();
+      setFeedbackStats(stats || []);
+    } catch (e) {
+      alert("Review failed: " + e.message);
+    } finally {
+      setReviewing(null);
+    }
+  };
+
   const pageNums = [...Array(Math.min(5, pages))].map((_, i) => i + 1);
+
+  // Feedback stats banner data
+  const totalNewValidated = feedbackStats.reduce((sum, s) => sum + s.new_validated_images, 0);
+  const totalPending = feedbackStats.reduce((sum, s) => sum + s.pending_review, 0);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10 animate-fade-in">
@@ -82,10 +116,56 @@ export default function ResultsPage() {
         </a>
       </div>
 
+      {/* Feedback Loop Banner */}
+      {(totalNewValidated > 0 || totalPending > 0) && (
+        <div className="vv-card p-4" style={{border:"1px solid var(--clr-accent)", background:"rgba(0,102,204,0.04)"}}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-[24px] mt-0.5" style={{color:"var(--clr-accent)"}}>model_training</span>
+              <div>
+                <p className="text-sm font-semibold" style={{color:"var(--clr-text)"}}>
+                  Feedback Loop — Model Improvement
+                </p>
+                <p className="text-xs mt-0.5" style={{color:"var(--clr-text-sub)"}}>
+                  {totalNewValidated > 0 && (
+                    <span>
+                      <strong style={{color:"var(--clr-success)"}}>{totalNewValidated}</strong> validated image{totalNewValidated !== 1 ? "s" : ""} exported to training dataset{feedbackStats.length === 1 ? ` "${feedbackStats[0].dataset_name}"` : ""}.
+                    </span>
+                  )}
+                  {totalNewValidated > 0 && totalPending > 0 && " "}
+                  {totalPending > 0 && (
+                    <span>
+                      <strong style={{color:"var(--clr-warn)"}}>{totalPending}</strong> result{totalPending !== 1 ? "s" : ""} pending manual review.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {totalPending > 0 && (
+                <button
+                  onClick={() => { setFilters(f => ({...f, review_status: "pending"})); setPage(1); load(1, {...filters, review_status: "pending"}); }}
+                  className="btn-outline text-xs py-1.5 px-3"
+                >
+                  <span className="material-symbols-outlined text-[16px]">rate_review</span>
+                  Review Pending
+                </button>
+              )}
+              {totalNewValidated > 0 && (
+                <Link href="/training" className="btn-primary text-xs py-1.5 px-3">
+                  <span className="material-symbols-outlined text-[16px]">model_training</span>
+                  Retrain Model
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="vv-card p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Date Range — fixed padding so icon doesn't overlap */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Date Range */}
           <div>
             <FilterLabel>Date Range</FilterLabel>
             <div className="relative flex items-center">
@@ -125,6 +205,16 @@ export default function ResultsPage() {
             </select>
           </div>
 
+          {/* Review Status */}
+          <div>
+            <FilterLabel>Review Status</FilterLabel>
+            <select value={filters.review_status} onChange={e => setFilters(p => ({...p, review_status:e.target.value}))}>
+              <option value="">All</option>
+              <option value="pending">⏳ Pending Review</option>
+              <option value="reviewed">✓ Reviewed</option>
+            </select>
+          </div>
+
           {/* Actions */}
           <div className="flex items-end gap-2">
             <button onClick={applyFilters} className="btn-primary flex-1 justify-center py-2">Apply</button>
@@ -157,6 +247,7 @@ export default function ResultsPage() {
         </span>
         {filters.verdict && <span className="badge badge-archived">Filter: {filters.verdict}</span>}
         {filters.model_id && <span className="badge badge-archived">Model filter active</span>}
+        {filters.review_status && <span className="badge badge-archived">Review: {filters.review_status}</span>}
       </div>
 
       {/* Table */}
@@ -165,7 +256,7 @@ export default function ResultsPage() {
           <table className="w-full text-left text-sm">
             <thead style={{background:"var(--clr-surface-low)"}}>
               <tr style={{borderBottom:"1px solid var(--clr-border)"}}>
-                {["Inspection ID","Timestamp","Part Number","Line","Verdict","Actions"].map(h => (
+                {["Inspection ID","Timestamp","Part Number","Verdict","Review","Actions"].map(h => (
                   <th key={h} className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap"
                     style={{color:"var(--clr-text-muted)"}}>{h}</th>
                 ))}
@@ -191,17 +282,20 @@ export default function ResultsPage() {
               ) : (
                 results.flatMap((r) => {
                   const rows = [];
+                  const needsReview = r.verdict === "Uncertain" && !r.review_verdict;
 
                   rows.push(
                     <tr
                       key={r.id}
                       style={{
                         borderBottom:"1px solid var(--clr-border)",
-                        background: expanded === r.id ? "var(--clr-surface-low)" : undefined,
+                        background: expanded === r.id
+                          ? "var(--clr-surface-low)"
+                          : needsReview ? "rgba(230,81,0,0.03)" : undefined,
                         cursor:"pointer",
                       }}
                       onMouseEnter={e => { if (expanded !== r.id) e.currentTarget.style.background="var(--clr-surface-low)"; }}
-                      onMouseLeave={e => { if (expanded !== r.id) e.currentTarget.style.background=""; }}
+                      onMouseLeave={e => { if (expanded !== r.id) e.currentTarget.style.background = needsReview ? "rgba(230,81,0,0.03)" : ""; }}
                     >
                       <td className="px-5 py-3 font-mono text-[12px]" style={{color:"var(--clr-text)"}}>
                         #{r.id?.substring?.(0,12) ?? r.id}
@@ -212,8 +306,21 @@ export default function ResultsPage() {
                       <td className="px-5 py-3 font-semibold" style={{color:"var(--clr-text)"}}>
                         PN-{r.id?.substring?.(0,6).toUpperCase() ?? ""}
                       </td>
-                      <td className="px-5 py-3" style={{color:"var(--clr-text-sub)"}}>Line A</td>
-                      <td className="px-5 py-3"><VerdictBadge verdict={r.verdict} /></td>
+                      <td className="px-5 py-3">
+                        <VerdictBadge verdict={r.verdict} />
+                      </td>
+                      <td className="px-5 py-3">
+                        {r.review_verdict ? (
+                          <ReviewBadge reviewVerdict={r.review_verdict} />
+                        ) : needsReview ? (
+                          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded"
+                            style={{background:"rgba(230,81,0,0.1)", color:"#e65100", border:"1px solid rgba(230,81,0,0.2)"}}>
+                            Needs Review
+                          </span>
+                        ) : (
+                          <span className="text-[10px]" style={{color:"var(--clr-text-muted)"}}>—</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-1">
                           <button
@@ -258,7 +365,7 @@ export default function ResultsPage() {
                               {r.image_path ? (
                                 <div className="relative" style={{background:"#000"}}>
                                   <img src={`${BASE_URL}${r.image_path}`} alt="Inspection" className="w-full object-cover" />
-                                  {r.verdict === "NG" && (
+                                  {(r.verdict === "NG" || r.review_verdict === "NG") && (
                                     <div className="absolute top-3 left-3 border-2 border-red-500 bg-red-500/20 px-2 py-0.5">
                                       <span className="text-[10px] text-red-400 font-bold">DEFECT {(r.confidence*100).toFixed(0)}%</span>
                                     </div>
@@ -280,26 +387,102 @@ export default function ResultsPage() {
                                 </p>
                               </div>
                               <div className="vv-card p-4">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>Verdict</p>
+                                <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>AI Verdict</p>
                                 <VerdictBadge verdict={r.verdict} />
                               </div>
-                              <div className="vv-card p-4">
-                                <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>Model</p>
-                                <p className="text-sm font-mono font-semibold" style={{color:"var(--clr-text)"}}>v{r.model_version || "4.2.1"}</p>
-                              </div>
+                              {r.review_verdict && (
+                                <div className="vv-card p-4" style={{border: `1px solid ${r.review_verdict === "OK" ? "rgba(22,163,74,0.3)" : "rgba(186,26,26,0.3)"}`}}>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider mb-1" style={{color:"var(--clr-text-muted)"}}>Human Verdict</p>
+                                  <ReviewBadge reviewVerdict={r.review_verdict} />
+                                  {r.reviewed_by && (
+                                    <p className="text-[10px] mt-2" style={{color:"var(--clr-text-muted)"}}>
+                                      by <strong>{r.reviewed_by}</strong> · {r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : ""}
+                                    </p>
+                                  )}
+                                  {r.exported_to_dataset && (
+                                    <p className="text-[10px] mt-1 flex items-center gap-1" style={{color:"var(--clr-success)"}}>
+                                      <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                                      Exported to training dataset
+                                    </p>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
-                            {/* Review */}
+                            {/* Review Panel */}
                             <div className="vv-card p-4">
-                              <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>Review Notes</p>
-                              <textarea
-                                className="w-full h-24 text-sm resize-none"
-                                placeholder="Enter manual review observations..."
-                              />
-                              <div className="flex gap-2 mt-3">
-                                <button className="btn-outline flex-1 justify-center text-xs py-2">False Positive</button>
-                                <button className="btn-primary flex-1 justify-center text-xs py-2">Confirm Defect</button>
-                              </div>
+                              {r.review_verdict ? (
+                                /* Already reviewed — show read-only summary */
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
+                                    Review Complete
+                                  </p>
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className="material-symbols-outlined text-[20px]" style={{color:"var(--clr-success)"}}>verified</span>
+                                    <span className="text-sm font-semibold" style={{color:"var(--clr-text)"}}>
+                                      Validated as {r.review_verdict === "OK" ? "OK (Pass)" : "NG (Defect)"}
+                                    </span>
+                                  </div>
+                                  {r.review_notes && (
+                                    <div className="p-3 rounded text-xs" style={{background:"var(--clr-surface-mid)", color:"var(--clr-text-sub)"}}>
+                                      <p className="text-[10px] font-semibold uppercase mb-1" style={{color:"var(--clr-text-muted)"}}>Notes</p>
+                                      {r.review_notes}
+                                    </div>
+                                  )}
+                                  <p className="text-[10px] mt-3" style={{color:"var(--clr-text-muted)"}}>
+                                    Reviewed by <strong>{r.reviewed_by}</strong>
+                                    <br />{r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : ""}
+                                  </p>
+                                </div>
+                              ) : (
+                                /* Not yet reviewed — show review form */
+                                <div>
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
+                                    Manual Review
+                                  </p>
+                                  <textarea
+                                    className="w-full h-24 text-sm resize-none"
+                                    placeholder="Enter manual review observations..."
+                                    value={reviewNotes[r.id] || ""}
+                                    onChange={e => setReviewNotes(prev => ({...prev, [r.id]: e.target.value}))}
+                                  />
+                                  <div className="flex gap-2 mt-3">
+                                    <button
+                                      onClick={() => handleReview(r.id, "OK")}
+                                      disabled={reviewing === r.id}
+                                      className="btn-outline flex-1 justify-center text-xs py-2"
+                                      style={{
+                                        borderColor: "rgba(22,163,74,0.4)",
+                                        color: "var(--clr-success)",
+                                      }}
+                                    >
+                                      {reviewing === r.id ? (
+                                        <span className="material-symbols-outlined text-[16px] animate-spin">hourglass_top</span>
+                                      ) : (
+                                        <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                                      )}
+                                      Mark as OK
+                                    </button>
+                                    <button
+                                      onClick={() => handleReview(r.id, "NG")}
+                                      disabled={reviewing === r.id}
+                                      className="btn-primary flex-1 justify-center text-xs py-2"
+                                      style={{background:"var(--clr-error)"}}
+                                    >
+                                      {reviewing === r.id ? (
+                                        <span className="material-symbols-outlined text-[16px] animate-spin">hourglass_top</span>
+                                      ) : (
+                                        <span className="material-symbols-outlined text-[16px]">report</span>
+                                      )}
+                                      Confirm NG
+                                    </button>
+                                  </div>
+                                  <p className="text-[10px] mt-2" style={{color:"var(--clr-text-muted)"}}>
+                                    <span className="material-symbols-outlined text-[12px]" style={{verticalAlign:"middle"}}>info</span>
+                                    {" "}Validated images will be auto-exported to the training dataset for model improvement.
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>

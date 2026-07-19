@@ -30,10 +30,16 @@ export default function LiveInspectionPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({video: true});
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setIsStreaming(true);
       setResult(null);
       setPreviewSrc(null);
+      // Assign stream after React renders the video element
+      requestAnimationFrame(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      });
     } catch (e) {
       alert("Could not access camera: " + e.message);
     }
@@ -46,6 +52,14 @@ export default function LiveInspectionPage() {
     }
     setIsStreaming(false);
   };
+
+  // Connect stream to video element when isStreaming changes and video element is mounted
+  useEffect(() => {
+    if (isStreaming && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isStreaming]);
 
   const captureAndInspect = async () => {
     if (!videoRef.current || !selectedModelId) return;
@@ -140,7 +154,7 @@ export default function LiveInspectionPage() {
             <div className="absolute inset-0 pattern-grid opacity-40" />
 
             {isStreaming && (
-              <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover z-10" />
+              <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-10" />
             )}
             {!isStreaming && previewSrc && (
               // eslint-disable-next-line @next/next/no-img-element

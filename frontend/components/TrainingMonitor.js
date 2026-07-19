@@ -154,14 +154,29 @@ export default function TrainingMonitor({initialJobId = null, onComplete, onDism
         )}
 
         {/* Live Chart */}
-        {epochsHistory.length > 0 && (
-          <div className="mt-2 h-40 w-full rounded overflow-hidden"
+        {epochsHistory.length > 0 && (() => {
+          const hasAccuracy = epochsHistory.some(e => e.val_accuracy != null);
+          const hasValLoss = epochsHistory.some(e => e.val_loss != null);
+          const hasTop5 = epochsHistory.some(e => e.val_top5 != null);
+          return (
+          <div className="mt-2 w-full rounded overflow-hidden"
             style={{background:"var(--clr-surface-low)", border:"1px solid var(--clr-border)", padding:8}}>
+            {/* Legend */}
+            <div className="flex flex-wrap gap-3 mb-1 px-1" style={{fontSize:10}}>
+              <span style={{color:"var(--clr-warn)"}}>● Train Loss</span>
+              {hasValLoss && <span style={{color:"var(--clr-accent)"}}>● Val Loss</span>}
+              {hasAccuracy && <span style={{color:"var(--clr-success)"}}>● Val Accuracy</span>}
+              {hasTop5 && <span style={{color:"#8b5cf6"}}>● Val Top-5</span>}
+            </div>
+            <div style={{height: 160}}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={epochsHistory} margin={{top:4, right:4, bottom:-10, left:-25}}>
+              <LineChart data={epochsHistory} margin={{top:4, right: hasAccuracy ? 5 : 4, bottom:-10, left:-25}}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--clr-border)" vertical={false} />
                 <XAxis dataKey="epoch" tick={{fill:"var(--clr-text-muted)", fontSize:10}} tickLine={false} axisLine={false} />
-                <YAxis tick={{fill:"var(--clr-text-muted)", fontSize:10}} tickLine={false} axisLine={false} />
+                <YAxis yAxisId="loss" tick={{fill:"var(--clr-text-muted)", fontSize:10}} tickLine={false} axisLine={false} />
+                {hasAccuracy && (
+                  <YAxis yAxisId="acc" orientation="right" domain={[0, 1]} tick={{fill:"var(--clr-text-muted)", fontSize:10}} tickLine={false} axisLine={false} tickFormatter={v => `${(v*100).toFixed(0)}%`} />
+                )}
                 <Tooltip
                   contentStyle={{
                     background:"var(--clr-surface)",
@@ -170,15 +185,28 @@ export default function TrainingMonitor({initialJobId = null, onComplete, onDism
                     fontSize:11,
                     color:"var(--clr-text)",
                   }}
+                  formatter={(value, name) => {
+                    if (name.toLowerCase().includes("acc") || name.toLowerCase().includes("top"))
+                      return [(value * 100).toFixed(1) + "%", name];
+                    return [Number(value).toFixed(4), name];
+                  }}
                 />
-                <Line type="monotone" dataKey="train_loss" name="Train Loss" stroke="var(--clr-warn)" strokeWidth={2} dot={false} isAnimationActive={false} />
-                {epochsHistory[0]?.val_loss !== undefined && (
-                  <Line type="monotone" dataKey="val_loss" name="Val Loss" stroke="var(--clr-accent)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                <Line yAxisId="loss" type="monotone" dataKey="train_loss" name="Train Loss" stroke="var(--clr-warn)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                {hasValLoss && (
+                  <Line yAxisId="loss" type="monotone" dataKey="val_loss" name="Val Loss" stroke="var(--clr-accent)" strokeWidth={2} dot={false} isAnimationActive={false} />
+                )}
+                {hasAccuracy && (
+                  <Line yAxisId="acc" type="monotone" dataKey="val_accuracy" name="Val Accuracy" stroke="var(--clr-success)" strokeWidth={2} dot={{r:2, fill:"var(--clr-success)"}} isAnimationActive={false} />
+                )}
+                {hasTop5 && (
+                  <Line yAxisId={hasAccuracy ? "acc" : "loss"} type="monotone" dataKey="val_top5" name="Val Top-5" stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 2" dot={false} isAnimationActive={false} />
                 )}
               </LineChart>
             </ResponsiveContainer>
+            </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Error */}
         {jobStatus?.error && (

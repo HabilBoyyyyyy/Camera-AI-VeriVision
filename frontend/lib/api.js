@@ -203,6 +203,7 @@ export async function fetchResults(page = 1, limit = 20, filters = {}) {
   if (filters.min_conf !== undefined && filters.min_conf !== "") params.append("min_conf", filters.min_conf);
   if (filters.max_conf !== undefined && filters.max_conf !== "") params.append("max_conf", filters.max_conf);
   if (filters.search_id) params.append("search_id", filters.search_id);
+  if (filters.review_status) params.append("review_status", filters.review_status);
 
   return apiGet(`/api/results?${params.toString()}`);
 }
@@ -217,12 +218,24 @@ export function getResultsExportUrl(filters = {}) {
   if (filters.min_conf !== undefined && filters.min_conf !== "") params.append("min_conf", filters.min_conf);
   if (filters.max_conf !== undefined && filters.max_conf !== "") params.append("max_conf", filters.max_conf);
   if (filters.search_id) params.append("search_id", filters.search_id);
+  if (filters.review_status) params.append("review_status", filters.review_status);
 
   return `${BASE_URL}/api/results/export${params.toString() ? '?' + params.toString() : ''}`;
 }
 
 export async function deleteResult(id) {
   return apiDelete(`/api/results/${id}`);
+}
+
+export async function submitReview(resultId, reviewVerdict, reviewNotes = "") {
+  return apiPut(`/api/results/${resultId}/review`, {
+    review_verdict: reviewVerdict,
+    review_notes: reviewNotes,
+  });
+}
+
+export async function fetchFeedbackStats() {
+  return apiGet('/api/results/feedback-stats');
 }
 
 // ─── Alerts ───────────────────────────────────────

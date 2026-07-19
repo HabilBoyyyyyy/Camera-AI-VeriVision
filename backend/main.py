@@ -50,8 +50,31 @@ def startup_event():
     db = SessionLocal()
     try:
         seed_default_users(db)
+        # Auto-migrate: add review columns if missing
+        _auto_migrate_review_columns(db)
     finally:
         db.close()
+
+
+def _auto_migrate_review_columns(db):
+    """Add review/validation columns to inspection_results if they don't exist."""
+    from sqlalchemy import text, inspect as sa_inspect
+    inspector = sa_inspect(engine)
+    if "inspection_results" not in inspector.get_table_names():
+        return
+    existing = {col["name"] for col in inspector.get_columns("inspection_results")}
+    migrations = [
+        ("review_verdict", "VARCHAR"),
+        ("review_notes", "TEXT"),
+        ("reviewed_by", "VARCHAR"),
+        ("reviewed_at", "DATETIME"),
+        ("exported_to_dataset", "BOOLEAN DEFAULT 0"),
+    ]
+    for col_name, col_type in migrations:
+        if col_name not in existing:
+            db.execute(text(f"ALTER TABLE inspection_results ADD COLUMN {col_name} {col_type}"))
+            print(f"[MIGRATION] Added column '{col_name}' to inspection_results")
+    db.commit()
 
 
 @app.get("/")
