@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useEffect} from "react";
-import {fetchResults, getResultsExportUrl, fetchModels, deleteResult, submitReview, fetchFeedbackStats} from "@/lib/api";
+import {fetchResults, getResultsExportUrl, fetchModels, deleteResult, submitReview, undoReview, fetchFeedbackStats} from "@/lib/api";
 import Link from "next/link";
 
 const BASE_URL = "http://localhost:8000";
@@ -95,7 +95,7 @@ export default function ResultsPage() {
     if (!confirm("Are you sure you want to undo this review? The exported image will be removed from the dataset.")) return;
     setReviewing(resultId);
     try {
-      await api.undoReview(resultId);
+      await undoReview(resultId);
       await load();
       const stats = await fetchFeedbackStats();
       setFeedbackStats(stats || []);
