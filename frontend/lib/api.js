@@ -57,6 +57,10 @@ export async function login(username, password) {
   return apiPost('/api/auth/login', { username, password });
 }
 
+export async function registerUser(username, password, role = "inspector") {
+  return apiPost('/api/auth/register', { username, password, role });
+}
+
 export async function logout() {
   return apiPost('/api/auth/logout', {});
 }
@@ -232,6 +236,10 @@ export async function submitReview(resultId, reviewVerdict, reviewNotes = "") {
     review_verdict: reviewVerdict,
     review_notes: reviewNotes,
   });
+}
+
+export async function undoReview(resultId) {
+  return apiPost(`/api/results/${resultId}/undo-review`, {});
 }
 
 export async function fetchFeedbackStats() {

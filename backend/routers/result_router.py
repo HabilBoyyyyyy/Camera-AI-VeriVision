@@ -143,6 +143,65 @@ def submit_review(
     }
 
 
+@router.post("/{result_id}/undo-review")
+def undo_review(
+    result_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    import glob
+    
+    result = db.query(models.InspectionResult).filter(
+        models.InspectionResult.id == result_id
+    ).first()
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Inspection result not found")
+        
+    if not result.review_verdict:
+        raise HTTPException(status_code=400, detail="Result has not been reviewed")
+        
+    # Attempt to find and delete the exported file from the dataset
+    if result.exported_to_dataset:
+        model_record = db.query(models.TrainedModel).filter(
+            models.TrainedModel.id == result.model_id
+        ).first()
+        if model_record and model_record.dataset_id:
+            dataset = db.query(models.Dataset).filter(
+                models.Dataset.id == model_record.dataset_id
+            ).first()
+            if dataset and dataset.folder_path:
+                from validators import _find_root
+                dataset_root = _find_root(Path(dataset.folder_path))
+                
+                # Search for the exported image across all subdirectories
+                search_pattern = str(dataset_root / "**" / f"reviewed_*_{result.id[:8]}.jpg")
+                for p in glob.glob(search_pattern, recursive=True):
+                    try:
+                        os.remove(p)
+                        # Decrement dataset count
+                        if dataset.num_images and dataset.num_images > 0:
+                            dataset.num_images -= 1
+                    except Exception as e:
+                        print(f"Failed to delete {p}: {e}")
+                        
+                # Invalidate cache if it exists
+                cache_file = dataset_root / "train.cache"
+                if cache_file.exists():
+                    cache_file.unlink()
+    
+    # Reset fields
+    result.review_verdict = None
+    result.review_notes = None
+    result.reviewed_by = None
+    result.reviewed_at = None
+    result.exported_to_dataset = False
+    
+    db.commit()
+    
+    return {"status": "success", "message": "Review undone successfully"}
+
+
 def _export_to_dataset(result: models.InspectionResult, db: Session) -> Optional[dict]:
     """Copy the inspection image into the training dataset's train/{verdict}/ folder."""
     try:
@@ -171,8 +230,10 @@ def _export_to_dataset(result: models.InspectionResult, db: Session) -> Optional
         from validators import _find_root
         dataset_root = _find_root(Path(dataset.folder_path))
         
-        # Destination: train/{OK or NG}/
-        dest_folder = dataset_root / "train" / result.review_verdict
+        # Destination: 80% to train, 20% to valid
+        import random
+        split_folder = "train" if random.random() < 0.8 else "valid"
+        dest_folder = dataset_root / split_folder / result.review_verdict
         dest_folder.mkdir(parents=True, exist_ok=True)
         
         # Generate filename: reviewed_{timestamp}_{original}.jpg

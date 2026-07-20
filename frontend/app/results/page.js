@@ -91,6 +91,21 @@ export default function ResultsPage() {
     }
   };
 
+  const handleUndoReview = async (resultId) => {
+    if (!confirm("Are you sure you want to undo this review? The exported image will be removed from the dataset.")) return;
+    setReviewing(resultId);
+    try {
+      await api.undoReview(resultId);
+      await load();
+      const stats = await fetchFeedbackStats();
+      setFeedbackStats(stats || []);
+    } catch (e) {
+      alert("Undo failed: " + e.message);
+    } finally {
+      setReviewing(null);
+    }
+  };
+
   const pageNums = [...Array(Math.min(5, pages))].map((_, i) => i + 1);
 
   // Feedback stats banner data
@@ -429,10 +444,25 @@ export default function ResultsPage() {
                                       {r.review_notes}
                                     </div>
                                   )}
-                                  <p className="text-[10px] mt-3" style={{color:"var(--clr-text-muted)"}}>
-                                    Reviewed by <strong>{r.reviewed_by}</strong>
-                                    <br />{r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : ""}
-                                  </p>
+                                  <div className="flex justify-between items-end mt-3">
+                                    <p className="text-[10px]" style={{color:"var(--clr-text-muted)"}}>
+                                      Reviewed by <strong>{r.reviewed_by}</strong>
+                                      <br />{r.reviewed_at ? new Date(r.reviewed_at).toLocaleString() : ""}
+                                    </p>
+                                    <button
+                                      onClick={() => handleUndoReview(r.id)}
+                                      disabled={reviewing === r.id}
+                                      className="btn-outline text-xs py-1 px-2 flex items-center gap-1"
+                                      style={{borderColor:"rgba(186, 26, 26, 0.4)", color:"var(--clr-error)"}}
+                                    >
+                                      {reviewing === r.id ? (
+                                        <span className="material-symbols-outlined text-[14px] animate-spin">hourglass_top</span>
+                                      ) : (
+                                        <span className="material-symbols-outlined text-[14px]">undo</span>
+                                      )}
+                                      Undo
+                                    </button>
+                                  </div>
                                 </div>
                               ) : (
                                 /* Not yet reviewed — show review form */

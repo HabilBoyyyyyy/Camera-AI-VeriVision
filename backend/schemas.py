@@ -45,6 +45,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "inspector"
+
+
 class UserResponse(BaseModel):
     username: str
     role: str

@@ -12,6 +12,7 @@ const adminNav = [
   {href: "/live",     label: "Live Inspection", icon: "precision_manufacturing"},
   {href: "/results",  label: "Results",         icon: "analytics"},
   {href: "/alerts",   label: "Alerts",          icon: "notifications"},
+  {href: "/users",    label: "Users",           icon: "group"},
 ];
 const inspectorNav = [
   {href: "/",         label: "Dashboard",       icon: "dashboard"},
