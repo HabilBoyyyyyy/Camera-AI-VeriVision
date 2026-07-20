@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useEffect, useRef} from "react";
-import {fetchDatasetImages, deleteDatasetImage, addImagesToDataset, hasAnnotations} from "@/lib/api";
+import {fetchDatasetImages, deleteDatasetImage, addImagesToDataset, hasAnnotations, fetchDataset, fetchDatasetAnnotations} from "@/lib/api";
 import ImageLabeler from "@/components/ImageLabeler";
 
 export default function DatasetExplorer({datasetId, onUpdate}) {
@@ -15,19 +15,48 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
   const [labelerTarget, setLabelerTarget] = useState(null); // {url, filename}
   const [annotMap, setAnnotMap] = useState({});              // filename → boolean
 
-  useEffect(() => { loadImages(); }, [datasetId]);
+  // Dataset info (classes, task_type)
+  const [datasetInfo, setDatasetInfo] = useState(null);
+
+  useEffect(() => {
+    loadImages();
+    // Fetch dataset info for classes
+    fetchDataset(datasetId).then(info => setDatasetInfo(info)).catch(() => {});
+  }, [datasetId]);
 
   const loadImages = async () => {
     try {
       const data = await fetchDatasetImages(datasetId);
       const normalized = (data || []).map(d => ({...d, filename: d.filename.replace(/\\/g, "/")}));
       setImages(normalized);
-      // Check annotations for each image
+      // Check annotations for each image (localStorage)
       const map = {};
       normalized.forEach(img => {
         map[img.filename] = hasAnnotations(datasetId, img.filename);
       });
       setAnnotMap(map);
+
+      // For detection datasets, also check YOLO label files from backend
+      // We do a lightweight check: try fetching annotations for the first few images
+      // to determine if there are labels. For the badge, we check by looking for
+      // label files in the sibling labels folder.
+      try {
+        const info = await fetchDataset(datasetId);
+        if (info?.task_type === "detection") {
+          const checkPromises = normalized.slice(0, 50).map(async (img) => {
+            if (!map[img.filename]) {
+              try {
+                const result = await fetchDatasetAnnotations(datasetId, img.filename);
+                if (result?.annotations?.length > 0) {
+                  map[img.filename] = true;
+                }
+              } catch {}
+            }
+          });
+          await Promise.all(checkPromises);
+          setAnnotMap({...map});
+        }
+      } catch {}
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -232,6 +261,7 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
           imageUrl={labelerTarget.url}
           filename={labelerTarget.filename}
           datasetId={datasetId}
+          datasetClasses={datasetInfo?.classes ? (() => { try { return JSON.parse(datasetInfo.classes); } catch { return []; } })() : []}
           onClose={() => setLabelerTarget(null)}
           onSaved={() => {
             // Refresh annotation badges

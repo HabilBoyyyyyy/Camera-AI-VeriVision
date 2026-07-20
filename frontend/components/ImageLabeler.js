@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useRef, useCallback, useEffect} from "react";
-import {saveAnnotations, fetchAnnotations, exportAnnotationsYOLO} from "@/lib/api";
+import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO} from "@/lib/api";
 
 /*
  * ─── Colour palette for annotation classes ───────────
@@ -28,7 +28,7 @@ function colorForClass(label, allLabels) {
  *   initialAnnotations  – optional pre-loaded annotations (used by CameraCapture)
  *   returnAnnotations   – if true, onSaved receives the annotations array instead of persisting to localStorage
  */
-export default function ImageLabeler({imageUrl, filename, datasetId, onClose, onSaved, initialAnnotations, returnAnnotations}) {
+export default function ImageLabeler({imageUrl, filename, datasetId, onClose, onSaved, initialAnnotations, returnAnnotations, datasetClasses}) {
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const imgRef = useRef(null);
@@ -38,8 +38,8 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const [history, setHistory] = useState([]);         // undo stack
   const [tool, setTool] = useState("box");            // "box" | "polygon" | "select"
   const [selectedIdx, setSelectedIdx] = useState(-1);
-  const [classNames, setClassNames] = useState(["OK", "NG"]);
-  const [activeClass, setActiveClass] = useState("OK");
+  const [classNames, setClassNames] = useState(datasetClasses?.length > 0 ? datasetClasses : ["OK", "NG"]);
+  const [activeClass, setActiveClass] = useState(datasetClasses?.length > 0 ? datasetClasses[0] : "OK");
   const [newClassName, setNewClassName] = useState("");
   const [imgLoaded, setImgLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -75,16 +75,60 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   useEffect(() => {
     if (initialAnnotations && initialAnnotations.length > 0) {
       setAnnotations(initialAnnotations);
-      const names = new Set(["OK", "NG"]);
+      const names = new Set(datasetClasses?.length > 0 ? datasetClasses : ["OK", "NG"]);
       initialAnnotations.forEach(a => names.add(a.label));
       setClassNames(Array.from(names));
     } else if (!returnAnnotations) {
+      // First try localStorage annotations
       fetchAnnotations(datasetId, filename).then(data => {
         if (data?.length > 0) {
           setAnnotations(data);
-          const names = new Set(["OK", "NG"]);
+          const names = new Set(datasetClasses?.length > 0 ? datasetClasses : ["OK", "NG"]);
           data.forEach(a => names.add(a.label));
           setClassNames(Array.from(names));
+        } else {
+          // Fallback: try fetching YOLO annotations from backend
+          fetchDatasetAnnotations(datasetId, filename).then(result => {
+            if (result?.classes?.length > 0) {
+              const names = new Set(result.classes);
+              setClassNames(Array.from(names));
+              setActiveClass(result.classes[0]);
+            }
+            if (result?.annotations?.length > 0 && imgRef.current) {
+              // Convert normalized YOLO coords to pixel coords
+              const iw = imgRef.current.naturalWidth;
+              const ih = imgRef.current.naturalHeight;
+              const pixelAnns = result.annotations.map(a => ({
+                type: "box",
+                x: Math.round((a.cx - a.w / 2) * iw),
+                y: Math.round((a.cy - a.h / 2) * ih),
+                w: Math.round(a.w * iw),
+                h: Math.round(a.h * ih),
+                label: a.label,
+              }));
+              setAnnotations(pixelAnns);
+            } else if (result?.annotations?.length > 0) {
+              // Image not loaded yet — wait for it and then convert
+              const waitForImg = setInterval(() => {
+                if (imgRef.current?.naturalWidth) {
+                  clearInterval(waitForImg);
+                  const iw = imgRef.current.naturalWidth;
+                  const ih = imgRef.current.naturalHeight;
+                  const pixelAnns = result.annotations.map(a => ({
+                    type: "box",
+                    x: Math.round((a.cx - a.w / 2) * iw),
+                    y: Math.round((a.cy - a.h / 2) * ih),
+                    w: Math.round(a.w * iw),
+                    h: Math.round(a.h * ih),
+                    label: a.label,
+                  }));
+                  setAnnotations(pixelAnns);
+                }
+              }, 100);
+              // Cleanup after 5 seconds max
+              setTimeout(() => clearInterval(waitForImg), 5000);
+            }
+          }).catch(() => {});
         }
       });
     }

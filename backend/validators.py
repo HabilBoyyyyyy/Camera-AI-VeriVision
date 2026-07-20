@@ -145,6 +145,28 @@ def validate_classification_dataset(dest_dir: Path) -> ValidationResult:
     return result
 
 
+def _parse_data_yaml(yaml_path: Path) -> dict:
+    """Parse a YOLO data.yaml file and return a dict with 'names' (class list)."""
+    import yaml
+    try:
+        with open(yaml_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        if not isinstance(data, dict):
+            return {}
+        # data.yaml 'names' can be a list ["OK","NG"] or a dict {0:"OK", 1:"NG"}
+        names_raw = data.get("names", [])
+        if isinstance(names_raw, dict):
+            # Sort by key (class index) and extract values
+            names = [names_raw[k] for k in sorted(names_raw.keys())]
+        elif isinstance(names_raw, list):
+            names = list(names_raw)
+        else:
+            names = []
+        return {"names": names, "nc": data.get("nc", len(names))}
+    except Exception:
+        return {}
+
+
 def validate_detection_dataset(dest_dir: Path) -> ValidationResult:
     root = _find_root(dest_dir)
     result = ValidationResult(valid=True)
@@ -153,6 +175,12 @@ def validate_detection_dataset(dest_dir: Path) -> ValidationResult:
         result.errors.append("Missing required file: data.yaml")
         result.valid = False
         return result
+
+    # Parse data.yaml to extract class names
+    yaml_info = _parse_data_yaml(root / "data.yaml")
+    class_names = yaml_info.get("names", [])
+    if not class_names:
+        result.warnings.append("data.yaml does not contain class names ('names' field).")
         
     # Check which structure is being used
     structure_a = ["images/train", "images/valid", "labels/train", "labels/valid"]
@@ -193,6 +221,8 @@ def validate_detection_dataset(dest_dir: Path) -> ValidationResult:
         "num_valid_images": len(valid_images),
         "num_train_labels": len(train_labels),
         "total_images": total_images,
+        "classes": class_names,
+        "num_classes": len(class_names),
     }
     result.valid = len(result.errors) == 0
     return result

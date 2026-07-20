@@ -277,3 +277,149 @@ async def add_dataset_images(
     db.commit()
     
     return {"status": "success", "total_images": new_count}
+
+
+def _find_label_file(ds_root: Path, image_filename: str) -> Path | None:
+    """Given an image filename (e.g. 'train/images/img001.jpg'), find its YOLO label .txt file."""
+    img_path = Path(image_filename)
+    label_name = img_path.stem + ".txt"
+
+    # Try standard YOLO structures:
+    # Structure A: images/train/img.jpg → labels/train/img.txt
+    # Structure B: train/images/img.jpg → train/labels/img.txt
+    parts = list(img_path.parts)
+
+    for i, part in enumerate(parts):
+        if part == "images":
+            label_parts = list(parts)
+            label_parts[i] = "labels"
+            label_parts[-1] = label_name
+            candidate = ds_root / Path(*label_parts)
+            if candidate.exists():
+                return candidate
+
+    # Fallback: look in a top-level 'labels' dir with same name
+    candidate = ds_root / "labels" / label_name
+    if candidate.exists():
+        return candidate
+
+    return None
+
+
+def _resolve_dataset_root(ds_folder: Path) -> Path:
+    """Resolve the actual root inside the dataset folder (handles single wrapper dir)."""
+    entries = [p for p in ds_folder.iterdir() if not p.name.startswith("__MACOSX")]
+    if len(entries) == 1 and entries[0].is_dir():
+        return entries[0]
+    return ds_folder
+
+
+@router.get("/{dataset_id}/annotations/{filename:path}")
+def get_image_annotations(
+    dataset_id: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Return YOLO annotations for a specific image, parsed into JSON format."""
+    ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
+    if not ds or not ds.folder_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    ds_root = _resolve_dataset_root(Path(ds.folder_path))
+
+    # Parse class names from data.yaml
+    class_names = []
+    data_yaml = ds_root / "data.yaml"
+    if data_yaml.exists():
+        import yaml
+        try:
+            with open(data_yaml, "r", encoding="utf-8") as f:
+                yaml_data = yaml.safe_load(f)
+            names_raw = yaml_data.get("names", [])
+            if isinstance(names_raw, dict):
+                class_names = [names_raw[k] for k in sorted(names_raw.keys())]
+            elif isinstance(names_raw, list):
+                class_names = list(names_raw)
+        except Exception:
+            pass
+
+    # Find the label file
+    label_path = _find_label_file(ds_root, filename)
+    if not label_path:
+        return {"annotations": [], "classes": class_names}
+
+    # Parse YOLO format: class_id cx cy w h (normalized 0-1)
+    annotations = []
+    try:
+        with open(label_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split()
+                if len(parts) < 5:
+                    continue
+                cls_id = int(parts[0])
+                cx, cy, bw, bh = float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+                label = class_names[cls_id] if cls_id < len(class_names) else f"class_{cls_id}"
+                annotations.append({
+                    "type": "box",
+                    "cx": cx,
+                    "cy": cy,
+                    "w": bw,
+                    "h": bh,
+                    "label": label,
+                    "class_id": cls_id,
+                })
+    except Exception:
+        pass
+
+    return {"annotations": annotations, "classes": class_names}
+
+
+@router.get("/{dataset_id}/classes")
+def get_dataset_classes(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Return the class names for a dataset."""
+    ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
+    if not ds:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    # Try from database first
+    if ds.classes_json:
+        try:
+            classes = json.loads(ds.classes_json)
+            if classes:
+                return {"classes": classes}
+        except Exception:
+            pass
+
+    # Fallback: parse from data.yaml for detection datasets
+    if ds.task_type == "detection" and ds.folder_path:
+        ds_root = _resolve_dataset_root(Path(ds.folder_path))
+        data_yaml = ds_root / "data.yaml"
+        if data_yaml.exists():
+            import yaml
+            try:
+                with open(data_yaml, "r", encoding="utf-8") as f:
+                    yaml_data = yaml.safe_load(f)
+                names_raw = yaml_data.get("names", [])
+                if isinstance(names_raw, dict):
+                    classes = [names_raw[k] for k in sorted(names_raw.keys())]
+                elif isinstance(names_raw, list):
+                    classes = list(names_raw)
+                else:
+                    classes = []
+                # Also update the database for future queries
+                if classes:
+                    ds.classes_json = json.dumps(classes)
+                    db.commit()
+                return {"classes": classes}
+            except Exception:
+                pass
+
+    return {"classes": []}

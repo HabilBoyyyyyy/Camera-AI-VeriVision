@@ -246,6 +246,15 @@ export async function fetchFeedbackStats() {
   return apiGet('/api/results/feedback-stats');
 }
 
+// ─── Dataset Annotations (YOLO) ──────────────────
+export async function fetchDatasetAnnotations(datasetId, filename) {
+  return apiGet(`/api/datasets/${datasetId}/annotations/${encodeURIComponent(filename)}`);
+}
+
+export async function fetchDatasetClasses(datasetId) {
+  return apiGet(`/api/datasets/${datasetId}/classes`);
+}
+
 // ─── Alerts ───────────────────────────────────────
 export async function fetchAlerts() {
   return apiGet('/api/alerts/');
