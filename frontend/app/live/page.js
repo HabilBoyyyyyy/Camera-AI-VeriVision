@@ -84,6 +84,10 @@ export default function LiveInspectionPage() {
       formData.append("threshold", (threshold / 100).toString());
       const res = await runInspection(formData);
       setResult(res);
+      if (res?.image_path) {
+        setPreviewSrc(`http://localhost:8000${res.image_path}`);
+        stopCamera();
+      }
     } catch (e) {
       console.error(e);
       alert("Inspection failed: " + e.message);
@@ -105,6 +109,9 @@ export default function LiveInspectionPage() {
       formData.append("threshold", (threshold / 100).toString());
       const res = await runInspection(formData);
       setResult(res);
+      if (res?.image_path) {
+        setPreviewSrc(`http://localhost:8000${res.image_path}`);
+      }
     } catch (e) {
       console.error(e);
       alert("Inspection failed: " + e.message);
@@ -168,7 +175,7 @@ export default function LiveInspectionPage() {
             )}
 
             {/* Verdict overlay */}
-            {result && (
+            {result && models.find(m => m.id === selectedModelId)?.task_type !== "detection" && (
               <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
                 <div
                   className="flex flex-col items-center gap-2 px-10 py-6 rounded-lg border-2"

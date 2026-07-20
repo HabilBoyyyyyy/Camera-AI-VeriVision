@@ -101,16 +101,34 @@ async def inspect_image(
         elif model_record.task_type == "detection" and result.boxes is not None:
             # Detection result
             if len(result.boxes) > 0:
-                box = result.boxes[0]
-                class_idx = int(box.cls[0])
-                confidence = float(box.conf[0])
-                class_name = result.names.get(class_idx, str(class_idx))
+                has_ng = False
+                highest_conf = 0.0
+                all_detections = []
+                for box in result.boxes:
+                    cls_idx = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    c_name = result.names.get(cls_idx, str(cls_idx))
+                    if conf > highest_conf:
+                        highest_conf = conf
+                        
+                    is_ng_cls = any(kw in c_name.lower() for kw in ["ng", "bad", "defect", "fail"])
+                    # If we find an NG object, we mark the whole inspection as NG
+                    # Alternatively, if there's no NG but OK, we can say OK.
+                    if is_ng_cls:
+                        has_ng = True
+                    
+                    all_detections.append({
+                        "class": c_name,
+                        "confidence": conf
+                    })
+                
                 details = {
-                    "predicted_class": class_name,
                     "num_detections": len(result.boxes),
+                    "detections": all_detections
                 }
-                is_ng = any(kw in class_name.lower() for kw in ["ng", "bad", "defect", "fail"])
-                if is_ng:
+                
+                confidence = highest_conf
+                if has_ng:
                     verdict = "NG"
                 else:
                     verdict = "OK" if confidence >= threshold else "Uncertain"
@@ -123,7 +141,14 @@ async def inspect_image(
     inspection_id = models.generate_uuid()
     image_filename = f"{inspection_id}.jpg"
     image_path = INSPECTION_DIR / image_filename
-    cv2.imwrite(str(image_path), frame)
+    
+    # If detection, plot the boxes on the image before saving
+    if model_record.task_type == "detection" and results and len(results) > 0:
+        frame_to_save = results[0].plot()
+    else:
+        frame_to_save = frame
+        
+    cv2.imwrite(str(image_path), frame_to_save)
     
     # Save to DB
     inspection_result = models.InspectionResult(
