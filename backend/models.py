@@ -76,3 +76,26 @@ class InspectionResult(Base):
     reviewed_at = Column(DateTime, nullable=True)
     exported_to_dataset = Column(Boolean, default=False)  # image exported to training dataset?
     model = relationship("TrainedModel", back_populates="inspection_results")
+
+class Integration(Base):
+    __tablename__ = "integrations"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)  # "webhook" or "mqtt"
+    trigger_on = Column(String, default="NG")  # "NG", "OK", "Uncertain", "any"
+    model_id = Column(String, ForeignKey("trained_models.id"), nullable=True)  # None = all models
+    is_active = Column(Boolean, default=True)
+    config_json = Column(Text, nullable=False)  # JSON: {url} or {broker, port, topic}
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class IntegrationLog(Base):
+    __tablename__ = "integration_logs"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    integration_id = Column(String, ForeignKey("integrations.id"), nullable=False)
+    inspection_id = Column(String, nullable=True)
+    verdict = Column(String, nullable=True)
+    status = Column(String, nullable=False)  # "success", "failed"
+    response_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    integration = relationship("Integration")

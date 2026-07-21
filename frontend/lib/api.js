@@ -325,3 +325,28 @@ export function exportAnnotationsYOLO(annotations, imgWidth, imgHeight, classNam
     return null;
   }).filter(Boolean).join("\n");
 }
+
+// ─── Integrations ─────────────────────────────────────
+export async function listIntegrations() {
+  return apiGet('/api/integrations/');
+}
+
+export async function createIntegration(data) {
+  return apiPost('/api/integrations/', data);
+}
+
+export async function updateIntegration(id, data) {
+  return apiPut(`/api/integrations/${id}`, data);
+}
+
+export async function deleteIntegration(id) {
+  return apiDelete(`/api/integrations/${id}`);
+}
+
+export async function testIntegration(id) {
+  return apiPost(`/api/integrations/${id}/test`, {});
+}
+
+export async function getIntegrationLogs(limit = 50) {
+  return apiGet(`/api/integrations/logs?limit=${limit}`);
+}

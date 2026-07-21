@@ -162,6 +162,17 @@ async def inspect_image(
     db.add(inspection_result)
     db.commit()
     
+    # Fire integrations (webhooks, MQTT) in background thread
+    from services.integration_service import dispatch_integrations
+    dispatch_integrations(
+        inspection_id=inspection_id,
+        verdict=verdict,
+        confidence=confidence,
+        model_id=model_id,
+        image_path=f"/data/inspections/{image_filename}",
+        db=db,
+    )
+    
     return {
         "id": inspection_id,
         "verdict": verdict,

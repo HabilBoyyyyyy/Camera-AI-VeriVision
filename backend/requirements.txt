@@ -19,3 +19,7 @@ passlib[bcrypt]
 # Utils
 aiofiles
 python-jose
+
+# Integrations
+httpx
+paho-mqtt
