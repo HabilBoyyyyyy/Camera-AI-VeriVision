@@ -423,3 +423,72 @@ def get_dataset_classes(
                 pass
 
     return {"classes": []}
+
+
+from pydantic import BaseModel
+import cv2
+import numpy as np
+
+class SmartPolygonRequest(BaseModel):
+    filename: str
+    bbox: list[float]  # [x_min, y_min, x_max, y_max]
+
+# Cache for the SAM model
+_sam_model = None
+
+@router.post("/{dataset_id}/smart-polygon")
+async def generate_smart_polygon(
+    dataset_id: str,
+    request: SmartPolygonRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
+    if not ds or not ds.folder_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    ds_root = _resolve_dataset_root(Path(ds.folder_path))
+    img_path = ds_root / request.filename
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Load SAM Model if not loaded
+    global _sam_model
+    if _sam_model is None:
+        try:
+            from ultralytics import SAM
+            # Use MobileSAM for speed
+            _sam_model = SAM("mobile_sam.pt")
+        except ImportError:
+            raise HTTPException(status_code=500, detail="ultralytics package is required for Smart Polygon.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to load SAM model: {str(e)}")
+    
+    # Load image
+    img = cv2.imread(str(img_path))
+    if img is None:
+        raise HTTPException(status_code=400, detail="Could not read image file.")
+    
+    # Run inference
+    try:
+        results = _sam_model(img, bboxes=[request.bbox], verbose=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Inference failed: {str(e)}")
+    
+    if not results or len(results) == 0:
+        return {"points": []}
+    
+    res = results[0]
+    
+    if res.masks is None or len(res.masks.xy) == 0:
+        return {"points": []}
+    
+    # Extract the polygon points
+    # mask.xy returns a list of polygons (each is an array of [x, y] coords).
+    # We take the first one corresponding to the bbox.
+    polygon_points = res.masks.xy[0]
+    
+    # Format points for frontend: [{x, y}, {x, y}, ...]
+    formatted_points = [{"x": float(pt[0]), "y": float(pt[1])} for pt in polygon_points]
+    
+    return {"points": formatted_points}

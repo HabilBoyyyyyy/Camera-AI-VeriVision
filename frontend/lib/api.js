@@ -255,6 +255,13 @@ export async function fetchDatasetClasses(datasetId) {
   return apiGet(`/api/datasets/${datasetId}/classes`);
 }
 
+export async function generateSmartPolygon(datasetId, filename, bbox) {
+  return apiPost(`/api/datasets/${datasetId}/smart-polygon`, {
+    filename: filename,
+    bbox: bbox
+  });
+}
+
 // ─── Alerts ───────────────────────────────────────
 export async function fetchAlerts() {
   return apiGet('/api/alerts/');

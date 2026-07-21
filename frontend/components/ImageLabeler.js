@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useRef, useCallback, useEffect} from "react";
-import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO} from "@/lib/api";
+import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO, generateSmartPolygon} from "@/lib/api";
 
 /*
  * ─── Colour palette for annotation classes ───────────
@@ -44,6 +44,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [smartPolyLoading, setSmartPolyLoading] = useState(false);
 
   // Drawing state
   const [drawing, setDrawing] = useState(false);
@@ -242,7 +243,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
     });
 
     // Drawing preview (box)
-    if (tool === "box" && drawing && drawStart && tempEnd) {
+    if ((tool === "box" || tool === "smart-polygon") && drawing && drawStart && tempEnd) {
       const color = colorForClass(activeClass, classNames);
       ctx.strokeStyle = color;
       ctx.lineWidth = 2 / (scale * zoom);
@@ -319,7 +320,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       return;
     }
 
-    if (tool === "box") {
+    if (tool === "box" || tool === "smart-polygon") {
       setDrawing(true);
       setDrawStart(pos);
       setTempEnd(pos);
@@ -334,7 +335,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       return;
     }
     const pos = canvasToImg(e.clientX, e.clientY);
-    if (tool === "box" && drawing) {
+    if ((tool === "box" || tool === "smart-polygon") && drawing) {
       setTempEnd(pos);
     }
     if (tool === "polygon" && polyPoints.length > 0) {
@@ -348,15 +349,33 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       setPanStart(null);
       return;
     }
-    if (tool === "box" && drawing && drawStart && tempEnd) {
+    if ((tool === "box" || tool === "smart-polygon") && drawing && drawStart && tempEnd) {
       const x = Math.min(drawStart.x, tempEnd.x);
       const y = Math.min(drawStart.y, tempEnd.y);
       const w = Math.abs(tempEnd.x - drawStart.x);
       const h = Math.abs(tempEnd.y - drawStart.y);
       if (w > 5 && h > 5) {
-        pushHistory([...annotations]);
-        setAnnotations(prev => [...prev, {type: "box", x, y, w, h, label: activeClass}]);
-        setSelectedIdx(annotations.length);
+        if (tool === "box") {
+          pushHistory([...annotations]);
+          setAnnotations(prev => [...prev, {type: "box", x, y, w, h, label: activeClass}]);
+          setSelectedIdx(annotations.length);
+        } else if (tool === "smart-polygon") {
+          setSmartPolyLoading(true);
+          const bbox = [x, y, x + w, y + h];
+          generateSmartPolygon(datasetId, filename, bbox).then(data => {
+            if (data.points && data.points.length >= 3) {
+              pushHistory([...annotations]);
+              setAnnotations(prev => [...prev, {type: "polygon", points: data.points, closed: true, label: activeClass}]);
+              setSelectedIdx(annotations.length);
+            } else {
+              alert("Smart Polygon failed to detect an object in the box.");
+            }
+          }).catch(err => {
+            alert("Smart Polygon Error: " + err.message);
+          }).finally(() => {
+            setSmartPolyLoading(false);
+          });
+        }
       }
       setDrawing(false);
       setDrawStart(null);
@@ -463,6 +482,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       }
       if (e.key === "b" || e.key === "B") { setTool("box"); setPolyPoints([]); }
       if (e.key === "p" || e.key === "P") { setTool("polygon"); setDrawing(false); }
+      if (e.key === "m" || e.key === "M") { setTool("smart-polygon"); setDrawing(false); setPolyPoints([]); }
       if (e.key === "v" || e.key === "V") { setTool("select"); setDrawing(false); setPolyPoints([]); }
       if (e.key === "h" || e.key === "H") { setTool("hand"); setDrawing(false); setPolyPoints([]); }
       if (e.key === "Delete" || e.key === "Backspace") {
@@ -568,6 +588,14 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
           <span className="material-symbols-outlined" style={{fontSize: 16}}>polyline</span>
           Polygon
         </button>
+        <button
+          className={`labeler-tool-btn ${tool === "smart-polygon" ? "active" : ""}`}
+          onClick={() => { setTool("smart-polygon"); setDrawing(false); setPolyPoints([]); }}
+          title="Smart Polygon / Box Prompt (M)"
+        >
+          <span className="material-symbols-outlined" style={{fontSize: 16}}>auto_fix_high</span>
+          Smart Poly
+        </button>
 
         <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
 
@@ -623,6 +651,14 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
             <div style={{textAlign: "center", color: "var(--clr-text-muted)"}}>
               <div className="w-6 h-6 border-2 rounded-full animate-spin mx-auto mb-2" style={{borderColor: "var(--clr-border)", borderTopColor: "var(--clr-accent)"}} />
               <p style={{fontSize: 12}}>Loading image…</p>
+            </div>
+          )}
+          
+          {/* Smart Polygon Loading Overlay */}
+          {smartPolyLoading && (
+            <div style={{position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", zIndex: 10, flexDirection: "column"}}>
+              <div className="w-8 h-8 border-4 rounded-full animate-spin mb-2" style={{borderColor: "rgba(255,255,255,0.2)", borderTopColor: "white"}} />
+              <p style={{fontWeight: 600, fontSize: 13}}>Generating Smart Polygon...</p>
             </div>
           )}
         </div>
@@ -717,6 +753,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
             {[
               ["B", "Bounding Box"],
               ["P", "Polygon"],
+              ["M", "Smart Polygon"],
               ["V", "Select"],
               ["H", "Pan (Hand)"],
               ["Del", "Delete selected"],
