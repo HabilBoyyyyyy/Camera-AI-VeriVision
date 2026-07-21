@@ -42,6 +42,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const [activeClass, setActiveClass] = useState(datasetClasses?.length > 0 ? datasetClasses[0] : "OK");
   const [newClassName, setNewClassName] = useState("");
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Drawing state
@@ -51,8 +52,9 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const [tempEnd, setTempEnd] = useState(null);        // mouse pos during draw
 
   // Zoom / pan
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({x: 0, y: 0});
+  const [view, setView] = useState({zoom: 1, pan: {x: 0, y: 0}});
+  const zoom = view.zoom;
+  const pan = view.pan;
   const [panning, setPanning] = useState(false);
   const [panStart, setPanStart] = useState(null);
 
@@ -61,12 +63,19 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
 
   // ── Load image ────────────────────────────────────
   useEffect(() => {
+    setImgLoaded(false);
+    setImgError(false);
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // We don't need crossOrigin="anonymous" because we only draw to canvas, 
+    // we don't extract pixel data (no toDataURL/getImageData).
     img.onload = () => {
       imgRef.current = img;
       setImgSize({w: img.naturalWidth, h: img.naturalHeight});
       setImgLoaded(true);
+    };
+    img.onerror = () => {
+      console.error("Failed to load image:", imageUrl);
+      setImgError(true);
     };
     img.src = imageUrl;
   }, [imageUrl]);
@@ -285,8 +294,8 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
 
   // ── Mouse handlers ────────────────────────────────
   const handleMouseDown = (e) => {
-    if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
-      // Middle-click or shift+click → pan
+    if (e.button === 1 || (e.button === 0 && e.shiftKey) || tool === "hand") {
+      // Middle-click or shift+click or Hand tool → pan
       setPanning(true);
       setPanStart({x: e.clientX - pan.x, y: e.clientY - pan.y});
       return;
@@ -321,7 +330,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
 
   const handleMouseMove = (e) => {
     if (panning && panStart) {
-      setPan({x: e.clientX - panStart.x, y: e.clientY - panStart.y});
+      setView(prev => ({...prev, pan: {x: e.clientX - panStart.x, y: e.clientY - panStart.y}}));
       return;
     }
     const pos = canvasToImg(e.clientX, e.clientY);
@@ -358,33 +367,104 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const handleCanvasClick = (e) => {
     if (tool !== "polygon") return;
     const pos = canvasToImg(e.clientX, e.clientY);
+    
+    if (polyPoints.length >= 3) {
+      const first = polyPoints[0];
+      const distImg = Math.hypot(first.x - pos.x, first.y - pos.y);
+      const {scale} = getCanvasSize();
+      const distScreen = distImg * scale * zoom;
+      
+      if (distScreen < 15) {
+        pushHistory([...annotations]);
+        setAnnotations(prev => [...prev, {type: "polygon", points: [...polyPoints], closed: true, label: activeClass}]);
+        setSelectedIdx(annotations.length);
+        setPolyPoints([]);
+        setTempEnd(null);
+        return;
+      }
+    }
     setPolyPoints(prev => [...prev, pos]);
   };
 
   const handleCanvasDblClick = (e) => {
     if (tool !== "polygon" || polyPoints.length < 3) return;
-    pushHistory([...annotations]);
-    setAnnotations(prev => [...prev, {type: "polygon", points: [...polyPoints], closed: true, label: activeClass}]);
-    setSelectedIdx(annotations.length);
+    // Since double click triggers 2 clicks, the last 2 points are duplicates
+    // or near duplicates of the current position. We should trim them.
+    const validPoints = polyPoints.slice(0, -1);
+    if (validPoints.length >= 3) {
+      pushHistory([...annotations]);
+      setAnnotations(prev => [...prev, {type: "polygon", points: [...validPoints], closed: true, label: activeClass}]);
+      setSelectedIdx(annotations.length);
+    }
     setPolyPoints([]);
     setTempEnd(null);
   };
 
   // ── Scroll to zoom ────────────────────────────────
+  // ── Zoom logic ────────────────────────────────────
+  const handleZoomChange = useCallback((delta, mouseX, mouseY) => {
+    setView(prev => {
+      const newZoom = Math.max(0.2, Math.min(5, prev.zoom + delta));
+      if (newZoom === prev.zoom) return prev;
+
+      let cx = mouseX, cy = mouseY;
+      if (cx === undefined) {
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          cx = rect.width / 2;
+          cy = rect.height / 2;
+        } else {
+          cx = 0; cy = 0;
+        }
+      }
+
+      const {scale} = getCanvasSize();
+      const S = scale * prev.zoom;
+      const S_new = scale * newZoom;
+      return {
+        zoom: newZoom,
+        pan: {
+          x: cx - (cx - prev.pan.x) * (S_new / S),
+          y: cy - (cy - prev.pan.y) * (S_new / S)
+        }
+      };
+    });
+  }, [getCanvasSize]);
+
+  // ── Scroll to zoom ────────────────────────────────
   const handleWheel = (e) => {
     e.preventDefault();
+    if (!canvasRef.current) return;
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom(prev => Math.max(0.2, Math.min(5, prev + delta)));
+    const rect = canvasRef.current.getBoundingClientRect();
+    handleZoomChange(delta, e.clientX - rect.left, e.clientY - rect.top);
   };
 
   // ── Keyboard shortcuts ────────────────────────────
   useEffect(() => {
     const handler = (e) => {
       if (e.target.tagName === "INPUT") return;
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") { 
+        if (tool === "polygon" && polyPoints.length > 0) {
+          setPolyPoints([]);
+          setTempEnd(null);
+        } else {
+          onClose(); 
+        }
+        return; 
+      }
+      if (e.key === "Enter" && tool === "polygon" && polyPoints.length >= 3) {
+        pushHistory([...annotations]);
+        setAnnotations(prev => [...prev, {type: "polygon", points: [...polyPoints], closed: true, label: activeClass}]);
+        setSelectedIdx(annotations.length);
+        setPolyPoints([]);
+        setTempEnd(null);
+        return;
+      }
       if (e.key === "b" || e.key === "B") { setTool("box"); setPolyPoints([]); }
       if (e.key === "p" || e.key === "P") { setTool("polygon"); setDrawing(false); }
       if (e.key === "v" || e.key === "V") { setTool("select"); setDrawing(false); setPolyPoints([]); }
+      if (e.key === "h" || e.key === "H") { setTool("hand"); setDrawing(false); setPolyPoints([]); }
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedIdx >= 0 && selectedIdx < annotations.length) {
           pushHistory([...annotations]);
@@ -465,6 +545,14 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
           Select
         </button>
         <button
+          className={`labeler-tool-btn ${tool === "hand" ? "active" : ""}`}
+          onClick={() => { setTool("hand"); setDrawing(false); setPolyPoints([]); }}
+          title="Pan (H)"
+        >
+          <span className="material-symbols-outlined" style={{fontSize: 16}}>pan_tool</span>
+          Pan
+        </button>
+        <button
           className={`labeler-tool-btn ${tool === "box" ? "active" : ""}`}
           onClick={() => { setTool("box"); setPolyPoints([]); }}
           title="Bounding Box (B)"
@@ -484,16 +572,16 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
         <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
 
         {/* Zoom controls */}
-        <button className="labeler-tool-btn" onClick={() => setZoom(z => Math.min(5, z + 0.25))} title="Zoom in">
+        <button className="labeler-tool-btn" onClick={() => handleZoomChange(0.25)} title="Zoom in">
           <span className="material-symbols-outlined" style={{fontSize: 16}}>zoom_in</span>
         </button>
         <span style={{fontSize: 11, fontWeight: 700, color: "var(--clr-text-sub)", minWidth: 40, textAlign: "center"}}>
           {Math.round(zoom * 100)}%
         </span>
-        <button className="labeler-tool-btn" onClick={() => setZoom(z => Math.max(0.2, z - 0.25))} title="Zoom out">
+        <button className="labeler-tool-btn" onClick={() => handleZoomChange(-0.25)} title="Zoom out">
           <span className="material-symbols-outlined" style={{fontSize: 16}}>zoom_out</span>
         </button>
-        <button className="labeler-tool-btn" onClick={() => { setZoom(1); setPan({x: 0, y: 0}); }} title="Reset view">
+        <button className="labeler-tool-btn" onClick={() => setView({zoom: 1, pan: {x: 0, y: 0}})} title="Reset view">
           <span className="material-symbols-outlined" style={{fontSize: 16}}>fit_screen</span>
         </button>
 
@@ -514,10 +602,16 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       <div style={{flex: 1, display: "flex", overflow: "hidden"}}>
         {/* Canvas */}
         <div ref={wrapRef} className="labeler-canvas-wrap" onWheel={handleWheel}>
-          {imgLoaded ? (
+          {imgError ? (
+            <div style={{textAlign: "center", color: "var(--clr-error)", padding: 20}}>
+              <span className="material-symbols-outlined" style={{fontSize: 32, marginBottom: 8}}>broken_image</span>
+              <p style={{fontSize: 14, fontWeight: 500}}>Failed to load image.</p>
+              <p style={{fontSize: 12, opacity: 0.7, marginTop: 4, wordBreak: "break-all"}}>{imageUrl}</p>
+            </div>
+          ) : imgLoaded ? (
             <canvas
               ref={canvasRef}
-              style={{cursor: tool === "select" ? "default" : tool === "polygon" ? "crosshair" : "crosshair"}}
+              style={{cursor: tool === "select" ? "default" : tool === "hand" || panning ? "grab" : "crosshair"}}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -624,6 +718,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
               ["B", "Bounding Box"],
               ["P", "Polygon"],
               ["V", "Select"],
+              ["H", "Pan (Hand)"],
               ["Del", "Delete selected"],
               ["Ctrl+Z", "Undo"],
               ["Scroll", "Zoom"],
