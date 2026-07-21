@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useRef, useCallback, useEffect} from "react";
-import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO, generateSmartPolygon} from "@/lib/api";
+import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO, generateSmartPolygon, predictBoxPrompt} from "@/lib/api";
 
 /*
  * ─── Colour palette for annotation classes ───────────
@@ -45,6 +45,11 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const [imgError, setImgError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [smartPolyLoading, setSmartPolyLoading] = useState(false);
+
+  // Box Prompt AI state
+  const [boxPromptLoading, setBoxPromptLoading] = useState(false);
+  const [boxPromptPredictions, setBoxPromptPredictions] = useState([]);
+  const [boxPromptThreshold, setBoxPromptThreshold] = useState(0.4);
 
   // Drawing state
   const [drawing, setDrawing] = useState(false);
@@ -243,7 +248,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
     });
 
     // Drawing preview (box)
-    if ((tool === "box" || tool === "smart-polygon") && drawing && drawStart && tempEnd) {
+    if ((tool === "box" || tool === "smart-polygon" || tool === "box-prompt") && drawing && drawStart && tempEnd) {
       const color = colorForClass(activeClass, classNames);
       ctx.strokeStyle = color;
       ctx.lineWidth = 2 / (scale * zoom);
@@ -252,6 +257,30 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       const h = tempEnd.y - drawStart.y;
       ctx.strokeRect(drawStart.x, drawStart.y, w, h);
       ctx.setLineDash([]);
+    }
+
+    // Box Prompt candidate predictions
+    if (boxPromptPredictions.length > 0) {
+      const activeColor = colorForClass(activeClass, classNames);
+      boxPromptPredictions.forEach(pred => {
+        if (pred.confidence < boxPromptThreshold) return;
+        ctx.strokeStyle = activeColor;
+        ctx.lineWidth = 2 / (scale * zoom);
+        ctx.setLineDash([5 / (scale * zoom), 3 / (scale * zoom)]);
+        ctx.strokeRect(pred.x, pred.y, pred.w, pred.h);
+        ctx.fillStyle = activeColor + "25";
+        ctx.fillRect(pred.x, pred.y, pred.w, pred.h);
+        ctx.setLineDash([]);
+
+        const tagText = `${pred.label} ${Math.round(pred.confidence * 100)}% ✕`;
+        const fs = Math.max(10, 12 / (scale * zoom));
+        ctx.font = `bold ${fs}px Geist, sans-serif`;
+        const tw = ctx.measureText(tagText).width;
+        ctx.fillStyle = activeColor;
+        ctx.fillRect(pred.x, pred.y - fs - 4, tw + 8, fs + 4);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(tagText, pred.x + 4, pred.y - 4);
+      });
     }
 
     // Drawing preview (polygon)
@@ -277,7 +306,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
     }
 
     ctx.restore();
-  }, [annotations, classNames, selectedIdx, imgLoaded, zoom, pan, getCanvasSize, tool, drawing, drawStart, tempEnd, polyPoints, activeClass]);
+  }, [annotations, classNames, selectedIdx, imgLoaded, zoom, pan, getCanvasSize, tool, drawing, drawStart, tempEnd, polyPoints, activeClass, boxPromptPredictions, boxPromptThreshold]);
 
   useEffect(() => { renderCanvas(); }, [renderCanvas]);
 
@@ -305,6 +334,30 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
 
     const pos = canvasToImg(e.clientX, e.clientY);
 
+    // Discard individual Box Prompt candidate on click
+    if (boxPromptPredictions.length > 0) {
+      const {scale} = getCanvasSize();
+      const candidates = boxPromptPredictions
+        .map((pred, originalIdx) => ({ pred, originalIdx }))
+        .filter(item => item.pred.confidence >= boxPromptThreshold);
+
+      const hit = candidates.find(item => {
+        const p = item.pred;
+        const margin = 5 / (scale * zoom);
+        return (
+          pos.x >= p.x - margin &&
+          pos.x <= p.x + p.w + margin &&
+          pos.y >= p.y - 25 / (scale * zoom) &&
+          pos.y <= p.y + p.h + margin
+        );
+      });
+
+      if (hit) {
+        setBoxPromptPredictions(prev => prev.filter((_, idx) => idx !== hit.originalIdx));
+        return;
+      }
+    }
+
     if (tool === "select") {
       // Hit test — find annotation under cursor
       const hit = [...annotations].reverse().findIndex(ann => {
@@ -320,7 +373,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       return;
     }
 
-    if (tool === "box" || tool === "smart-polygon") {
+    if (tool === "box" || tool === "smart-polygon" || tool === "box-prompt") {
       setDrawing(true);
       setDrawStart(pos);
       setTempEnd(pos);
@@ -335,7 +388,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       return;
     }
     const pos = canvasToImg(e.clientX, e.clientY);
-    if ((tool === "box" || tool === "smart-polygon") && drawing) {
+    if ((tool === "box" || tool === "smart-polygon" || tool === "box-prompt") && drawing) {
       setTempEnd(pos);
     }
     if (tool === "polygon" && polyPoints.length > 0) {
@@ -349,7 +402,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       setPanStart(null);
       return;
     }
-    if ((tool === "box" || tool === "smart-polygon") && drawing && drawStart && tempEnd) {
+    if ((tool === "box" || tool === "smart-polygon" || tool === "box-prompt") && drawing && drawStart && tempEnd) {
       const x = Math.min(drawStart.x, tempEnd.x);
       const y = Math.min(drawStart.y, tempEnd.y);
       const w = Math.abs(tempEnd.x - drawStart.x);
@@ -374,6 +427,20 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
             alert("Smart Polygon Error: " + err.message);
           }).finally(() => {
             setSmartPolyLoading(false);
+          });
+        } else if (tool === "box-prompt") {
+          setBoxPromptLoading(true);
+          const promptBbox = {x, y, w, h};
+          predictBoxPrompt(datasetId, filename, promptBbox, activeClass, 0.15).then(data => {
+            if (data.predictions && data.predictions.length > 0) {
+              setBoxPromptPredictions(data.predictions);
+            } else {
+              alert("No matching objects found.");
+            }
+          }).catch(err => {
+            alert("Box Prompt Error: " + err.message);
+          }).finally(() => {
+            setBoxPromptLoading(false);
           });
         }
       }
@@ -591,10 +658,18 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
         <button
           className={`labeler-tool-btn ${tool === "smart-polygon" ? "active" : ""}`}
           onClick={() => { setTool("smart-polygon"); setDrawing(false); setPolyPoints([]); }}
-          title="Smart Polygon / Box Prompt (M)"
+          title="Smart Polygon (M)"
         >
           <span className="material-symbols-outlined" style={{fontSize: 16}}>auto_fix_high</span>
           Smart Poly
+        </button>
+        <button
+          className={`labeler-tool-btn ${tool === "box-prompt" ? "active" : ""}`}
+          onClick={() => { setTool("box-prompt"); setDrawing(false); setPolyPoints([]); }}
+          title="Box Prompt AI (Shift+B)"
+        >
+          <span className="material-symbols-outlined" style={{fontSize: 16}}>smart_toy</span>
+          Box Prompt
         </button>
 
         <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
@@ -654,11 +729,92 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
             </div>
           )}
           
-          {/* Smart Polygon Loading Overlay */}
-          {smartPolyLoading && (
+          {/* Smart Polygon / Box Prompt Loading Overlay */}
+          {(smartPolyLoading || boxPromptLoading) && (
             <div style={{position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", zIndex: 10, flexDirection: "column"}}>
               <div className="w-8 h-8 border-4 rounded-full animate-spin mb-2" style={{borderColor: "rgba(255,255,255,0.2)", borderTopColor: "white"}} />
-              <p style={{fontWeight: 600, fontSize: 13}}>Generating Smart Polygon...</p>
+              <p style={{fontWeight: 600, fontSize: 13}}>
+                {boxPromptLoading ? "Scanning for similar objects…" : "Generating Smart Polygon…"}
+              </p>
+            </div>
+          )}
+
+          {/* Roboflow-style Box Prompt Action Bar */}
+          {boxPromptPredictions.length > 0 && (
+            <div style={{
+              position: "absolute",
+              top: 16,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "var(--clr-surface-high)",
+              border: "1px solid var(--clr-border)",
+              borderRadius: 8,
+              padding: "8px 16px",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              zIndex: 20
+            }}>
+              <div style={{display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--clr-text)"}}>
+                <span className="material-symbols-outlined" style={{fontSize: 18, color: "var(--clr-accent)"}}>smart_toy</span>
+                AI Matches:
+              </div>
+
+              {/* Confidence Threshold Slider */}
+              <div style={{display: "flex", alignItems: "center", gap: 8}}>
+                <span style={{fontSize: 11, color: "var(--clr-text-muted)"}}>Confidence:</span>
+                <input
+                  type="range"
+                  min="0.20"
+                  max="0.90"
+                  step="0.05"
+                  value={boxPromptThreshold}
+                  onChange={(e) => setBoxPromptThreshold(parseFloat(e.target.value))}
+                  style={{cursor: "pointer", width: 90}}
+                />
+                <span style={{fontSize: 11, fontWeight: 700, minWidth: 32, color: "var(--clr-accent)"}}>
+                  {Math.round(boxPromptThreshold * 100)}%
+                </span>
+              </div>
+
+              <div style={{fontSize: 12, color: "var(--clr-text-sub)", fontWeight: 700}}>
+                {boxPromptPredictions.filter(p => p.confidence >= boxPromptThreshold).length} found
+                <span style={{fontSize: 10, fontWeight: 400, color: "var(--clr-text-muted)", marginLeft: 6}}>(Click any box to remove)</span>
+              </div>
+
+              {/* Accept All */}
+              <button
+                className="btn-primary"
+                style={{padding: "4px 14px", fontSize: 11}}
+                onClick={() => {
+                  const valid = boxPromptPredictions.filter(p => p.confidence >= boxPromptThreshold);
+                  if (valid.length > 0) {
+                    pushHistory([...annotations]);
+                    const newAnns = valid.map(p => ({
+                      type: "box",
+                      x: p.x,
+                      y: p.y,
+                      w: p.w,
+                      h: p.h,
+                      label: p.label
+                    }));
+                    setAnnotations(prev => [...prev, ...newAnns]);
+                  }
+                  setBoxPromptPredictions([]);
+                }}
+              >
+                Accept All
+              </button>
+
+              {/* Discard */}
+              <button
+                className="btn-outline"
+                style={{padding: "4px 12px", fontSize: 11}}
+                onClick={() => setBoxPromptPredictions([])}
+              >
+                Discard
+              </button>
             </div>
           )}
         </div>

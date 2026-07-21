@@ -262,6 +262,15 @@ export async function generateSmartPolygon(datasetId, filename, bbox) {
   });
 }
 
+export async function predictBoxPrompt(datasetId, filename, promptBbox, label, threshold = 0.4) {
+  return apiPost(`/api/datasets/${datasetId}/box-prompt-predict`, {
+    filename,
+    prompt_bbox: promptBbox,
+    label,
+    threshold
+  });
+}
+
 // ─── Alerts ───────────────────────────────────────
 export async function fetchAlerts() {
   return apiGet('/api/alerts/');
