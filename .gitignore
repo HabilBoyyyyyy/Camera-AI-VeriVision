@@ -69,3 +69,4 @@ ehthumbs_vista.db
 .project
 .classpath
 .settings/
+*.pt
