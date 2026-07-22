@@ -492,3 +492,126 @@ async def generate_smart_polygon(
     formatted_points = [{"x": float(pt[0]), "y": float(pt[1])} for pt in polygon_points]
     
     return {"points": formatted_points}
+
+
+class BoxPromptRequest(BaseModel):
+    filename: str
+    prompt_bbox: dict  # {x, y, w, h}
+    label: str = "object"
+    threshold: float = 0.4
+
+# Cache for YOLO-World model
+_yolo_world_model = None
+
+def _get_yolo_world():
+    global _yolo_world_model
+    if _yolo_world_model is None:
+        try:
+            from ultralytics import YOLOWorld
+            print("[INFO] Loading YOLO-World model (yolov8m-worldv2.pt)...")
+            _yolo_world_model = YOLOWorld("yolov8m-worldv2.pt")
+        except Exception as e:
+            print(f"[WARN] Failed to load YOLOWorld model: {e}")
+            _yolo_world_model = False
+    return _yolo_world_model if _yolo_world_model is not False else None
+
+@router.post("/{dataset_id}/box-prompt-predict")
+async def box_prompt_predict(
+    dataset_id: str,
+    request: BoxPromptRequest,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """Roboflow-style Box Prompting: Uses YOLO-World (yolov8m-worldv2.pt) zero-shot detection with visual template matching fallback."""
+    ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
+    if not ds or not ds.folder_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    
+    ds_root = _resolve_dataset_root(Path(ds.folder_path))
+    img_path = ds_root / request.filename
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    img = cv2.imread(str(img_path))
+    if img is None:
+        raise HTTPException(status_code=400, detail="Could not read image file.")
+    
+    img_h, img_w = img.shape[:2]
+    
+    pb = request.prompt_bbox
+    px = max(0, int(pb.get("x", 0)))
+    py = max(0, int(pb.get("y", 0)))
+    pw = int(pb.get("w", 0))
+    ph = int(pb.get("h", 0))
+    
+    if pw < 5 or ph < 5 or px + pw > img_w or py + ph > img_h:
+        raise HTTPException(status_code=400, detail="Invalid prompt bounding box dimensions.")
+    
+    min_thresh = max(0.1, min(0.95, request.threshold))
+    predictions = []
+
+    # 1. Try YOLO-World Zero-Shot Detection
+    yolo_world = _get_yolo_world()
+    if yolo_world and request.label and request.label.strip():
+        try:
+            target_class = request.label.strip()
+            yolo_world.set_classes([target_class])
+            results = yolo_world.predict(img, conf=min_thresh, verbose=False)
+            if results and len(results) > 0 and results[0].boxes is not None and len(results[0].boxes) > 0:
+                for box in results[0].boxes:
+                    coords = box.xywh[0].cpu().numpy()  # [cx, cy, w, h]
+                    cx, cy, bw, bh = float(coords[0]), float(coords[1]), float(coords[2]), float(coords[3])
+                    conf = float(box.conf[0])
+                    bx = int(cx - bw / 2)
+                    by = int(cy - bh / 2)
+                    predictions.append({
+                        "x": max(0, bx),
+                        "y": max(0, by),
+                        "w": int(bw),
+                        "h": int(bh),
+                        "label": target_class,
+                        "confidence": round(conf, 3)
+                    })
+        except Exception as e:
+            print(f"[WARN] YOLO-World prediction failed: {e}")
+
+    # 2. Fallback to Multi-Scale Template Matching if YOLO-World produced no predictions
+    if not predictions:
+        template = img[py:py+ph, px:px+pw]
+        boxes = []
+        scores = []
+        scales = [0.75, 0.88, 1.0, 1.12, 1.25]
+        
+        for scale in scales:
+            sw = int(pw * scale)
+            sh = int(ph * scale)
+            if sw < 8 or sh < 8 or sw > img_w or sh > img_h:
+                continue
+            
+            scaled_tpl = cv2.resize(template, (sw, sh), interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC)
+            res = cv2.matchTemplate(img, scaled_tpl, cv2.TM_CCOEFF_NORMED)
+            
+            loc = np.where(res >= min_thresh)
+            for pt_y, pt_x in zip(loc[0], loc[1]):
+                score = float(res[pt_y, pt_x])
+                boxes.append([int(pt_x), int(pt_y), int(sw), int(sh)])
+                scores.append(score)
+                
+        if boxes:
+            indices = cv2.dnn.NMSBoxes(boxes, scores, score_threshold=min_thresh, nms_threshold=0.35)
+            if len(indices) > 0:
+                flat_indices = indices.flatten() if hasattr(indices, 'flatten') else indices
+                for i in flat_indices:
+                    bx, by, bw, bh = boxes[i]
+                    conf = round(float(scores[i]), 3)
+                    predictions.append({
+                        "x": bx,
+                        "y": by,
+                        "w": bw,
+                        "h": bh,
+                        "label": request.label,
+                        "confidence": conf
+                    })
+            
+    predictions.sort(key=lambda p: p["confidence"], reverse=True)
+    return {"predictions": predictions}
