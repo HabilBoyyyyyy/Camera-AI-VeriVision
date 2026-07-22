@@ -5,22 +5,17 @@ import {usePathname} from "next/navigation";
 import {useAuth} from "@/lib/AuthContext";
 
 const adminNav = [
-  {href: "/",         label: "Dashboard",       icon: "dashboard"},
-  {href: "/datasets", label: "Datasets",        icon: "database"},
-  {href: "/training", label: "Training",        icon: "model_training"},
-  {href: "/models",   label: "Models",          icon: "deployed_code"},
-  {href: "/live",     label: "Live Inspection", icon: "precision_manufacturing"},
-  {href: "/results",  label: "Results",         icon: "analytics"},
-  {href: "/alerts",   label: "Alerts",          icon: "notifications"},
-  {href: "/integrations", label: "Integrations", icon: "hub"},
-  {href: "/templates",    label: "Templates",    icon: "bookmark"},
-  {href: "/users",    label: "Users",           icon: "group"},
+  {href: "/",             label: "Dashboard",       icon: "dashboard"},
+  {href: "/ai-studio",    label: "AI Studio",       icon: "model_training"},
+  {href: "/live",         label: "Live Inspection", icon: "precision_manufacturing"},
+  {href: "/results",      label: "Results",         icon: "analytics"},
+  {href: "/configuration",label: "Configuration",   icon: "settings"},
+  {href: "/users",        label: "Users",           icon: "group"},
 ];
 const inspectorNav = [
   {href: "/",         label: "Dashboard",       icon: "dashboard"},
   {href: "/live",     label: "Live Inspection", icon: "precision_manufacturing"},
   {href: "/results",  label: "Results",         icon: "analytics"},
-  {href: "/alerts",   label: "Alerts",          icon: "notifications"},
 ];
 
 export default function Sidebar({isOpen, onClose}) {

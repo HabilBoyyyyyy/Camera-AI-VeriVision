@@ -279,8 +279,8 @@ async def add_dataset_images(
     return {"status": "success", "total_images": new_count}
 
 
-def _find_label_file(ds_root: Path, image_filename: str) -> Path | None:
-    """Given an image filename (e.g. 'train/images/img001.jpg'), find its YOLO label .txt file."""
+def _find_label_file(ds_folder: Path, image_filename: str) -> Path | None:
+    """Given an image filename relative to ds_folder, find its YOLO label .txt file."""
     img_path = Path(image_filename)
     label_name = img_path.stem + ".txt"
 
@@ -294,11 +294,12 @@ def _find_label_file(ds_root: Path, image_filename: str) -> Path | None:
             label_parts = list(parts)
             label_parts[i] = "labels"
             label_parts[-1] = label_name
-            candidate = ds_root / Path(*label_parts)
+            candidate = ds_folder / Path(*label_parts)
             if candidate.exists():
                 return candidate
 
-    # Fallback: look in a top-level 'labels' dir with same name
+    # Fallback: look in a top-level 'labels' dir
+    ds_root = _resolve_dataset_root(ds_folder)
     candidate = ds_root / "labels" / label_name
     if candidate.exists():
         return candidate
@@ -345,7 +346,7 @@ def get_image_annotations(
             pass
 
     # Find the label file
-    label_path = _find_label_file(ds_root, filename)
+    label_path = _find_label_file(Path(ds.folder_path), filename)
     if not label_path:
         return {"annotations": [], "classes": class_names}
 
@@ -446,9 +447,7 @@ async def generate_smart_polygon(
     ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
     if not ds or not ds.folder_path:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    
-    ds_root = _resolve_dataset_root(Path(ds.folder_path))
-    img_path = ds_root / request.filename
+    img_path = Path(ds.folder_path) / request.filename
     if not img_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     
@@ -526,9 +525,7 @@ async def box_prompt_predict(
     ds = db.query(models.Dataset).filter(models.Dataset.id == dataset_id).first()
     if not ds or not ds.folder_path:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    
-    ds_root = _resolve_dataset_root(Path(ds.folder_path))
-    img_path = ds_root / request.filename
+    img_path = Path(ds.folder_path) / request.filename
     if not img_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
     

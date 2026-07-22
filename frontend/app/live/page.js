@@ -181,226 +181,216 @@ export default function LiveInspectionPage() {
         </p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Camera / Preview Panel */}
-        <div className="flex-1 vv-card overflow-hidden flex flex-col">
-          {/* Camera Header */}
-          <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isStreaming ? "bg-green-500" : "bg-red-500"}`} />
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{color:"var(--clr-text-sub)"}}>
-                {isStreaming ? "Camera Feed: Live" : "Camera Idle"}
-              </span>
-            </div>
-            <span className="text-[11px] font-mono" style={{color:"var(--clr-text-muted)"}}>
-              {isStreaming ? "● STREAMING" : "● OFFLINE"}
-            </span>
-          </div>
-          {/* Video area */}
-          <div className="relative flex-1 min-h-[420px] flex items-center justify-center" style={{background:"#050a12"}}>
-            {/* Grid pattern overlay */}
-            <div className="absolute inset-0 pattern-grid opacity-40" />
-
-            {isStreaming && (
-              <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-10" />
-            )}
-            {!isStreaming && previewSrc && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={previewSrc} alt="Preview" className="absolute inset-0 w-full h-full object-contain z-10" />
-            )}
-            {!isStreaming && !previewSrc && (
-              <div className="relative z-10 flex flex-col items-center gap-3 text-center">
-                <span className="material-symbols-outlined text-[64px] opacity-20" style={{color:"#94a3b8"}}>videocam_off</span>
-                <p className="text-xs uppercase tracking-widest font-semibold" style={{color:"#4a5568"}}>Camera Off</p>
-              </div>
-            )}
-
-            {/* Verdict overlay */}
-            {result && models.find(m => m.id === selectedModelId)?.task_type !== "detection" && (
-              <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-                <div
-                  className="flex flex-col items-center gap-2 px-10 py-6 rounded-lg border-2"
-                  style={{
-                    background: verdictInfo(result.verdict).bg,
-                    borderColor: verdictInfo(result.verdict).border,
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <span className="text-5xl font-black tracking-widest font-mono" style={{color: verdictInfo(result.verdict).color}}>
-                    {verdictInfo(result.verdict).label}
-                  </span>
-                  <span className="text-lg font-mono" style={{color:"#94a3b8"}}>
-                    {(result.confidence * 100).toFixed(1)}% confidence
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* HUD status badge */}
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-3 py-1.5 rounded" style={{background:"rgba(0,0,0,0.7)", border:"1px solid rgba(255,255,255,0.08)"}}>
-              <span className={isStreaming ? "status-dot-active" : "status-dot-danger"} />
-              <span className="text-[10px] font-bold tracking-widest uppercase font-mono text-white">
-                {isStreaming ? "Live" : "Idle"}
-              </span>
-            </div>
-          </div>
-
-          {/* Bottom actions bar */}
-          <div className="px-4 py-3 flex flex-wrap items-center gap-3 shrink-0" style={{borderTop:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
-            <button
-              id="btn-toggle-camera"
-              onClick={isStreaming ? stopCamera : startCamera}
-              disabled={!selectedModelId}
-              className="btn-primary"
-              style={{
-                background: isStreaming ? "var(--clr-error)" : "var(--clr-text)",
-                minWidth: "140px",
-                justifyContent: "center",
-              }}
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                {isStreaming ? "videocam_off" : "videocam"}
-              </span>
-              {isStreaming ? "Stop Camera" : "Start Camera"}
-            </button>
-
-            {isStreaming && (
-              <button
-                id="btn-capture-inspect"
-                onClick={captureAndInspect}
-                disabled={inspecting || !selectedModelId}
-                className="btn-primary"
-                style={{background:"var(--clr-success)", minWidth:"160px", justifyContent:"center"}}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  {inspecting ? "hourglass_top" : "center_focus_strong"}
-                </span>
-                {inspecting ? "Inspecting..." : "Capture & Inspect"}
-              </button>
-            )}
-
-            <input type="file" accept="image/*" ref={fileRef} className="hidden" onChange={handleFileUpload} />
-            <button
-              id="btn-upload-image"
-              onClick={() => fileRef.current?.click()}
-              disabled={!selectedModelId || inspecting}
-              className="btn-outline"
-            >
-              <span className="material-symbols-outlined text-[18px]">upload</span>
-              Upload Image
-            </button>
-          </div>
-        </div>
-
-        {/* Controls Panel */}
-        <div className="w-full lg:w-72 flex flex-col gap-4">
-          {/* Template Selector */}
-          {templates.length > 0 && (
-            <div className="vv-card p-4">
-              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
-                <span className="material-symbols-outlined text-[14px] align-middle mr-1">bookmark</span>
-                Load Template
-              </label>
-              <select
-                value={activeTemplate?.id || ""}
-                onChange={(e) => loadTemplate(e.target.value)}
-              >
-                <option value="">— Manual Configuration —</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}{t.line_name ? ` (${t.line_name})` : ""}
-                  </option>
-                ))}
-              </select>
-              {activeTemplate && (
-                <div className="mt-2 p-2 rounded text-[10px]" style={{background:"rgba(56,139,253,0.08)", border:"1px solid rgba(56,139,253,0.2)"}}>
-                  <div className="flex items-center gap-1 mb-1" style={{color:"var(--clr-accent)"}}>
-                    <span className="material-symbols-outlined text-[12px]">check_circle</span>
-                    <strong>Template active</strong>
-                  </div>
-                  {activeTemplate.description && (
-                    <p style={{color:"var(--clr-text-sub)"}}>{activeTemplate.description}</p>
-                  )}
-                  {activeTemplate.integrations?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {activeTemplate.integrations.map((intg) => (
-                        <span key={intg.id} className="px-1.5 py-0.5 rounded text-[9px] font-medium"
-                          style={{background:"var(--clr-surface-mid)", color:"var(--clr-text-sub)"}}>
-                          {intg.type === "webhook" ? "⚡" : "📡"} {intg.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Model Selector */}
-          <div className="vv-card p-4">
-            <label className="block text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
-              Inspection Model
+      {/* Top Config Bar */}
+      <div className="vv-card p-4 flex flex-wrap items-center gap-4">
+        {/* Template Selector */}
+        {templates.length > 0 && (
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-semibold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>
+              Template
             </label>
             <select
-              id="select-model"
-              value={selectedModelId}
-              onChange={(e) => setSelectedModelId(e.target.value)}
+              className="text-xs py-1.5 px-2 bg-transparent border rounded"
+              style={{borderColor:"var(--clr-border)", color:"var(--clr-text)"}}
+              value={activeTemplate?.id || ""}
+              onChange={(e) => loadTemplate(e.target.value)}
             >
-              {models.length === 0 && <option value="">No trained models</option>}
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} v{m.version} ({m.task_type})
+              <option value="">— Manual Configuration —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.line_name ? ` (${t.line_name})` : ""}
                 </option>
               ))}
             </select>
           </div>
+        )}
 
-          {/* Threshold */}
-          <div className="vv-card p-4">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-semibold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>
-                Confidence Threshold
-              </label>
-              <span className="text-base font-bold" style={{color:"var(--clr-accent)"}}>{threshold}%</span>
-            </div>
-            <input
-              type="range" min="0" max="100"
-              value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
-            />
-            <div className="flex justify-between mt-1">
-              <span className="text-[10px]" style={{color:"var(--clr-text-muted)"}}>Loose</span>
-              <span className="text-[10px]" style={{color:"var(--clr-text-muted)"}}>Strict</span>
-            </div>
+        {/* Active Template Badge */}
+        {activeTemplate && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium" style={{background:"rgba(56,139,253,0.08)", border:"1px solid rgba(56,139,253,0.2)", color:"var(--clr-accent)"}}>
+            <span className="material-symbols-outlined text-[14px]">check_circle</span>
+            <span>{activeTemplate.name} Active</span>
           </div>
+        )}
 
-          {/* Result Card */}
-          {result && (
-            <div className="vv-card p-4">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-3" style={{color:"var(--clr-text-muted)"}}>
+        {/* Model Selector */}
+        <div className="flex items-center gap-2 ml-2">
+          <label className="text-[11px] font-semibold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>
+            Model
+          </label>
+          <select
+            id="select-model"
+            className="text-xs py-1.5 px-2 bg-transparent border rounded"
+            style={{borderColor:"var(--clr-border)", color:"var(--clr-text)"}}
+            value={selectedModelId}
+            onChange={(e) => setSelectedModelId(e.target.value)}
+          >
+            {models.length === 0 && <option value="">No trained models</option>}
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name} v{m.version} ({m.task_type})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Threshold */}
+        <div className="flex items-center gap-3 ml-auto">
+          <label className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-2" style={{color:"var(--clr-text-muted)"}}>
+            Threshold
+            <span className="text-sm font-bold" style={{color:"var(--clr-accent)"}}>{threshold}%</span>
+          </label>
+          <input
+            type="range" min="0" max="100"
+            value={threshold}
+            onChange={(e) => setThreshold(Number(e.target.value))}
+            className="w-32"
+          />
+        </div>
+      </div>
+
+      {/* Camera / Preview Panel (Full Width) */}
+      <div className="vv-card overflow-hidden flex flex-col w-full">
+        {/* Camera Header */}
+        <div className="px-4 py-3 flex items-center justify-between shrink-0" style={{borderBottom:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${isStreaming ? "bg-green-500" : "bg-red-500"}`} />
+            <span className="text-[11px] font-semibold uppercase tracking-wider" style={{color:"var(--clr-text-sub)"}}>
+              {isStreaming ? "Camera Feed: Live" : "Camera Idle"}
+            </span>
+          </div>
+          <span className="text-[11px] font-mono" style={{color:"var(--clr-text-muted)"}}>
+            {isStreaming ? "● STREAMING" : "● OFFLINE"}
+          </span>
+        </div>
+        
+        {/* Video area */}
+        <div className="relative w-full min-h-[480px] flex items-center justify-center" style={{background:"#050a12"}}>
+          {/* Grid pattern overlay */}
+          <div className="absolute inset-0 pattern-grid opacity-40" />
+
+          {isStreaming && (
+            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-10" />
+          )}
+          {!isStreaming && previewSrc && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewSrc} alt="Preview" className="absolute inset-0 w-full h-full object-contain z-10" />
+          )}
+          {!isStreaming && !previewSrc && (
+            <div className="relative z-10 flex flex-col items-center gap-3 text-center">
+              <span className="material-symbols-outlined text-[64px] opacity-20" style={{color:"#94a3b8"}}>videocam_off</span>
+              <p className="text-xs uppercase tracking-widest font-semibold" style={{color:"#4a5568"}}>Camera Off</p>
+            </div>
+          )}
+
+          {/* Verdict overlay */}
+          {result && models.find(m => m.id === selectedModelId)?.task_type !== "detection" && (
+            <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+              <div
+                className="flex flex-col items-center gap-2 px-10 py-6 rounded-lg border-2 shadow-2xl"
+                style={{
+                  background: verdictInfo(result.verdict).bg,
+                  borderColor: verdictInfo(result.verdict).border,
+                  backdropFilter: "blur(8px)",
+                }}
+              >
+                <span className="text-5xl font-black tracking-widest font-mono drop-shadow-md" style={{color: verdictInfo(result.verdict).color}}>
+                  {verdictInfo(result.verdict).label}
+                </span>
+                <span className="text-lg font-mono drop-shadow" style={{color:"#cbd5e1"}}>
+                  {(result.confidence * 100).toFixed(1)}% confidence
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* HUD status badge */}
+          <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-3 py-1.5 rounded shadow" style={{background:"rgba(0,0,0,0.7)", border:"1px solid rgba(255,255,255,0.08)"}}>
+            <span className={isStreaming ? "status-dot-active" : "status-dot-danger"} />
+            <span className="text-[10px] font-bold tracking-widest uppercase font-mono text-white">
+              {isStreaming ? "Live" : "Idle"}
+            </span>
+          </div>
+        </div>
+
+        {/* Bottom actions bar */}
+        <div className="px-4 py-3 flex flex-wrap items-center justify-center gap-4 shrink-0" style={{borderTop:"1px solid var(--clr-border)", background:"var(--clr-surface-low)"}}>
+          <button
+            id="btn-toggle-camera"
+            onClick={isStreaming ? stopCamera : startCamera}
+            disabled={!selectedModelId}
+            className="btn-primary"
+            style={{
+              background: isStreaming ? "var(--clr-error)" : "var(--clr-text)",
+              minWidth: "140px",
+              justifyContent: "center",
+            }}
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              {isStreaming ? "videocam_off" : "videocam"}
+            </span>
+            {isStreaming ? "Stop Camera" : "Start Camera"}
+          </button>
+
+          {isStreaming && (
+            <button
+              id="btn-capture-inspect"
+              onClick={captureAndInspect}
+              disabled={inspecting || !selectedModelId}
+              className="btn-primary"
+              style={{background:"var(--clr-success)", minWidth:"160px", justifyContent:"center"}}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {inspecting ? "hourglass_top" : "center_focus_strong"}
+              </span>
+              {inspecting ? "Inspecting..." : "Capture & Inspect"}
+            </button>
+          )}
+
+          <input type="file" accept="image/*" ref={fileRef} className="hidden" onChange={handleFileUpload} />
+          <button
+            id="btn-upload-image"
+            onClick={() => fileRef.current?.click()}
+            disabled={!selectedModelId || inspecting}
+            className="btn-outline"
+          >
+            <span className="material-symbols-outlined text-[18px]">upload</span>
+            Upload Image
+          </button>
+        </div>
+      </div>
+
+      {/* Bottom Section: Result Card & Event Monitor */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        
+        {/* Left Column (Wider): Result Card */}
+        <div className="lg:col-span-3 flex flex-col h-full">
+          {result ? (
+            <div className="vv-card p-6 h-full flex flex-col justify-center">
+              <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{color:"var(--clr-text-muted)"}}>
                 Inspection Result
               </h3>
               <div
-                className="p-4 rounded"
+                className="p-6 rounded-lg"
                 style={{
                   background: verdictInfo(result.verdict).bg,
                   border: `1px solid ${verdictInfo(result.verdict).border}`,
                 }}
               >
-                <div className="flex justify-between items-center mb-3">
-                  <div className="text-3xl font-black font-mono" style={{color: verdictInfo(result.verdict).color}}>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="text-4xl font-black font-mono" style={{color: verdictInfo(result.verdict).color}}>
                     {verdictInfo(result.verdict).label}
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] font-bold uppercase" style={{color:"var(--clr-text-muted)"}}>Confidence</div>
-                    <div className="text-xl font-bold font-mono" style={{color:"var(--clr-text)"}}>
+                    <div className="text-xs font-bold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>Confidence</div>
+                    <div className="text-2xl font-bold font-mono mt-1" style={{color:"var(--clr-text)"}}>
                       {(result.confidence * 100).toFixed(1)}%
                     </div>
                   </div>
                 </div>
-                <div className="pass-rate-bar">
+                <div className="pass-rate-bar h-2 rounded-full overflow-hidden" style={{background: "var(--clr-surface-mid)"}}>
                   <div
-                    className="pass-rate-fill"
+                    className="h-full transition-all duration-500 ease-out"
                     style={{
                       width: `${result.confidence * 100}%`,
                       background: verdictInfo(result.verdict).color,
@@ -409,112 +399,94 @@ export default function LiveInspectionPage() {
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="vv-card p-6 h-full flex flex-col items-center justify-center text-center opacity-60 min-h-[200px]">
+              <span className="material-symbols-outlined text-4xl mb-3" style={{color: "var(--clr-text-muted)"}}>image_search</span>
+              <p className="text-sm font-medium" style={{color: "var(--clr-text-sub)"}}>No inspection results yet</p>
+              <p className="text-xs mt-1" style={{color: "var(--clr-text-muted)"}}>Start the camera or upload an image to begin.</p>
+            </div>
           )}
-
-          {/* Instructions */}
-          <div className="vv-card p-4">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
-              Instructions
-            </h3>
-            <ol className="text-xs space-y-1.5" style={{color:"var(--clr-text-sub)"}}>
-              {[
-                "Select an inspection model",
-                "Start camera or upload an image",
-                "Click Capture & Inspect to run AI analysis",
-                "Review the result and confidence score",
-              ].map((step, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold" style={{background:"var(--clr-surface-mid)", color:"var(--clr-text-sub)"}}>
-                    {i + 1}
-                  </span>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          </div>
         </div>
-      </div>
 
-      {/* Live Event Monitor (Terminal) */}
-      <div className="flex flex-col mt-6">
-        <h3 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--clr-text-sub)" }}>
-          <span className="inline-flex items-center gap-1.5">
+        {/* Right Column: Live Event Monitor */}
+        <div className="lg:col-span-2 flex flex-col h-full">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: "var(--clr-text-sub)" }}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
             </span>
             Live Event Monitor
-          </span>
-        </h3>
+          </h3>
 
-        <div
-          className="vv-card flex-1 flex flex-col overflow-hidden"
-          style={{ height: 250, background: "#0d1117" }}
-        >
-          {/* Terminal Header */}
-          <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
-            <div className="flex gap-1.5">
-              <span className="w-3 h-3 rounded-full" style={{ background: "#ff5f57" }} />
-              <span className="w-3 h-3 rounded-full" style={{ background: "#febc2e" }} />
-              <span className="w-3 h-3 rounded-full" style={{ background: "#28c840" }} />
-            </div>
-            <span className="text-[11px] font-mono ml-2" style={{ color: "#8b949e" }}>verivision-integration-monitor</span>
-          </div>
-
-          {/* Terminal Body */}
-          <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed" style={{ color: "#c9d1d9" }}>
-            {liveEvents.length === 0 ? (
-              <div className="text-center py-8" style={{ color: "#484f58" }}>
-                <p>Waiting for integration events...</p>
-                <p className="mt-1 text-[10px]">Events will appear here when inspections trigger integrations.</p>
+          <div
+            className="vv-card flex-1 flex flex-col overflow-hidden min-h-[200px]"
+            style={{ background: "#0d1117" }}
+          >
+            {/* Terminal Header */}
+            <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
+              <div className="flex gap-1.5">
+                <span className="w-3 h-3 rounded-full" style={{ background: "#ff5f57" }} />
+                <span className="w-3 h-3 rounded-full" style={{ background: "#febc2e" }} />
+                <span className="w-3 h-3 rounded-full" style={{ background: "#28c840" }} />
               </div>
-            ) : (
-              liveEvents.map((evt, i) => (
-                <div key={i} className="mb-2 flex gap-2">
-                  <span style={{ color: "#484f58" }}>
-                    [{evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : "—"}]
-                  </span>
-                  <span
-                    style={{
-                      color:
-                        evt.status === "success"
-                          ? "#3fb950"
-                          : evt.status === "failed"
-                          ? "#f85149"
-                          : "#d29922",
-                    }}
-                  >
-                    {evt.status === "success" ? "✓" : evt.status === "failed" ? "✗" : "⚡"}
-                  </span>
-                  <span>
-                    <span style={{ color: "#79c0ff" }}>{evt.integration_name}</span>
-                    {" "}
-                    <span style={{ color: "#8b949e" }}>({evt.integration_type})</span>
-                    {" → "}
+              <span className="text-[11px] font-mono ml-2" style={{ color: "#8b949e" }}>verivision-monitor</span>
+            </div>
+
+            {/* Terminal Body */}
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed" style={{ color: "#c9d1d9" }}>
+              {liveEvents.length === 0 ? (
+                <div className="text-center py-8" style={{ color: "#484f58" }}>
+                  <p>Waiting for events...</p>
+                </div>
+              ) : (
+                liveEvents.map((evt, i) => (
+                  <div key={i} className="mb-2 flex gap-2">
+                    <span style={{ color: "#484f58" }}>
+                      [{evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : "—"}]
+                    </span>
                     <span
                       style={{
                         color:
-                          evt.verdict === "NG"
-                            ? "#f85149"
-                            : evt.verdict === "OK"
+                          evt.status === "success"
                             ? "#3fb950"
-                            : evt.verdict === "TEST"
-                            ? "#d29922"
-                            : "#8b949e",
+                            : evt.status === "failed"
+                            ? "#f85149"
+                            : "#d29922",
                       }}
                     >
-                      {evt.verdict}
+                      {evt.status === "success" ? "✓" : evt.status === "failed" ? "✗" : "⚡"}
                     </span>
-                    {evt.confidence != null && (
-                      <span style={{ color: "#8b949e" }}> ({(evt.confidence * 100).toFixed(1)}%)</span>
-                    )}
-                  </span>
-                </div>
-              ))
-            )}
-            <div ref={logEndRef} />
+                    <span>
+                      <span style={{ color: "#79c0ff" }}>{evt.integration_name}</span>
+                      {" "}
+                      <span style={{ color: "#8b949e" }}>({evt.integration_type})</span>
+                      {" → "}
+                      <span
+                        style={{
+                          color:
+                            evt.verdict === "NG"
+                              ? "#f85149"
+                              : evt.verdict === "OK"
+                              ? "#3fb950"
+                              : evt.verdict === "TEST"
+                              ? "#d29922"
+                              : "#8b949e",
+                        }}
+                      >
+                        {evt.verdict}
+                      </span>
+                      {evt.confidence != null && (
+                        <span style={{ color: "#8b949e" }}> ({(evt.confidence * 100).toFixed(1)}%)</span>
+                      )}
+                    </span>
+                  </div>
+                ))
+              )}
+              <div ref={logEndRef} />
+            </div>
           </div>
         </div>
+
       </div>
     </div>
   );
