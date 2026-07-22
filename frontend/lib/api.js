@@ -276,6 +276,18 @@ export async function fetchAlerts() {
   return apiGet('/api/alerts/');
 }
 
+export async function acknowledgeAlert(alertId) {
+  return apiPut(`/api/alerts/${alertId}/acknowledge`);
+}
+
+export async function acknowledgeAllAlerts() {
+  return apiPut('/api/alerts/acknowledge-all');
+}
+
+export async function generateAIInsight() {
+  return apiPost('/api/alerts/generate-insight', {});
+}
+
 // ─── Chatbot ──────────────────────────────────────
 export async function sendChatMessage(message) {
   return apiPost('/api/chat/', { message });

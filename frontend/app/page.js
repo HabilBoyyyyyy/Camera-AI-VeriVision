@@ -7,7 +7,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
 } from "recharts";
-import {fetchDashboardSummary, getTrainingHistory, fetchAlerts} from "@/lib/api";
+import {fetchDashboardSummary, getTrainingHistory, fetchAlerts, acknowledgeAlert, acknowledgeAllAlerts, generateAIInsight} from "@/lib/api";
 import {useAuth} from "@/lib/AuthContext";
 import TrainingMonitor from "@/components/TrainingMonitor";
 
@@ -109,6 +109,8 @@ export default function DashboardPage() {
       if (fetchedAlerts) {
         setAlertsData(fetchedAlerts);
         setAlertsList(fetchedAlerts.alerts || []);
+        setAiSource(fetchedAlerts.summary_source || null);
+        setAiModel(fetchedAlerts.summary_model || null);
       }
       const active = (history || []).find(j => j.status === "training" || j.status === "queued");
       setActiveJobId(active?.job_id || null);
@@ -118,8 +120,29 @@ export default function DashboardPage() {
 
   useEffect(() => { loadDashboard(); }, []);
 
-  const handleDismissAlert = (id) => {
+  const [aiSource, setAiSource] = useState(null);
+  const [aiModel, setAiModel] = useState(null);
+  const [refreshingInsight, setRefreshingInsight] = useState(false);
+
+  const handleDismissAlert = async (id) => {
     setAlertsList(prev => prev.filter(a => a.id !== id));
+    try { await acknowledgeAlert(id); } catch (e) { console.error(e); }
+  };
+
+  const handleAcknowledgeAll = async () => {
+    setAlertsList([]);
+    try { await acknowledgeAllAlerts(); } catch (e) { console.error(e); }
+  };
+
+  const handleRefreshInsight = async () => {
+    setRefreshingInsight(true);
+    try {
+      const result = await generateAIInsight();
+      setAlertsData(prev => ({...prev, summary: result.insight}));
+      setAiSource(result.source);
+      setAiModel(result.model);
+    } catch (e) { console.error(e); }
+    finally { setRefreshingInsight(false); }
   };
 
   const statCards = summary ? [
@@ -192,9 +215,29 @@ export default function DashboardPage() {
             className="vv-card p-5 relative overflow-hidden animate-fade-in"
             style={{borderColor:"rgba(0,140,199,0.2)", background:"rgba(0,140,199,0.03)"}}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <span className="material-symbols-outlined text-[18px]" style={{color:"var(--clr-accent)"}}>auto_awesome</span>
-              <span className="text-[11px] font-bold uppercase tracking-widest" style={{color:"var(--clr-accent)"}}>AI Shift Summary</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]" style={{color:"var(--clr-accent)", fontVariationSettings:"'FILL' 1"}}>auto_awesome</span>
+                <span className="text-[11px] font-bold uppercase tracking-widest" style={{color:"var(--clr-accent)"}}>AI Shift Summary</span>
+                {aiSource && (
+                  <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
+                    aiSource === "ollama"
+                      ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
+                      : "text-slate-400 border-slate-500/30 bg-slate-500/10"
+                  }`}>
+                    {aiSource === "ollama" ? `🧠 ${aiModel || "LLM"}` : "📊 Heuristic"}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleRefreshInsight}
+                disabled={refreshingInsight}
+                className="btn-outline text-[10px] py-1 px-2.5 flex items-center gap-1"
+                title="Re-generate AI insight"
+              >
+                <span className={`material-symbols-outlined text-[14px] ${refreshingInsight ? 'animate-spin' : ''}`}>refresh</span>
+                {refreshingInsight ? "Thinking..." : "Refresh"}
+              </button>
             </div>
             <p className="text-sm leading-relaxed font-medium" style={{color:"var(--clr-text-sub)"}}>{alertsData.summary}</p>
           </div>
@@ -207,7 +250,21 @@ export default function DashboardPage() {
               <h3 className="text-base font-semibold flex items-center gap-2" style={{color:"var(--clr-text)"}}>
                 <span className="material-symbols-outlined text-[20px]" style={{color:"var(--clr-warn)", fontVariationSettings:"'FILL' 1"}}>notifications_active</span>
                 System Alerts
+                {alertsList.length > 0 && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20">
+                    {alertsList.length}
+                  </span>
+                )}
               </h3>
+              {alertsList.length > 1 && (
+                <button
+                  onClick={handleAcknowledgeAll}
+                  className="btn-outline text-[10px] py-1 px-2.5 flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">done_all</span>
+                  Acknowledge All
+                </button>
+              )}
             </div>
             
             <div className="flex-1 divide-y" style={{divideColor:"var(--clr-border)"}}>

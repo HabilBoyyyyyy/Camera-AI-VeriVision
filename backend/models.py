@@ -113,3 +113,21 @@ class InspectionTemplate(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     model = relationship("TrainedModel")
+
+class Alert(Base):
+    __tablename__ = "alerts"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    alert_type = Column(String, nullable=False)  # burst_defect, drift, uncertainty_triage, low_yield, training_done, ai_insight
+    severity = Column(String, nullable=False)  # critical, warning, info
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    icon = Column(String, default="info")
+    action_label = Column(String, nullable=True)
+    action_url = Column(String, nullable=True)
+    related_model_id = Column(String, nullable=True)
+    is_acknowledged = Column(Boolean, default=False)
+    acknowledged_by = Column(String, nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)  # auto-dismiss after this time
+    metadata_json = Column(Text, nullable=True)  # extra context (JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
