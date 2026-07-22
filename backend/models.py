@@ -99,3 +99,17 @@ class IntegrationLog(Base):
     response_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     integration = relationship("Integration")
+
+class InspectionTemplate(Base):
+    __tablename__ = "inspection_templates"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    model_id = Column(String, ForeignKey("trained_models.id"), nullable=True)
+    threshold = Column(Float, default=0.7)
+    integration_ids_json = Column(Text, nullable=True)  # JSON array of integration IDs
+    line_name = Column(String, nullable=True)  # e.g. "Line Alpha"
+    created_by = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    model = relationship("TrainedModel")

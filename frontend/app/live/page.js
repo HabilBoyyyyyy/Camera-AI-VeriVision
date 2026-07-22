@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useEffect, useRef} from "react";
-import {fetchInspectionModels, runInspection} from "@/lib/api";
+import {fetchInspectionModels, runInspection, listTemplates} from "@/lib/api";
 
 export default function LiveInspectionPage() {
   const [models, setModels] = useState([]);
@@ -11,10 +11,14 @@ export default function LiveInspectionPage() {
   const [result, setResult] = useState(null);
   const [inspecting, setInspecting] = useState(false);
   const [previewSrc, setPreviewSrc] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [activeTemplate, setActiveTemplate] = useState(null);
+  const [liveEvents, setLiveEvents] = useState([]);
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const fileRef = useRef(null);
+  const logEndRef = useRef(null);
 
   useEffect(() => {
     fetchInspectionModels()
@@ -23,8 +27,45 @@ export default function LiveInspectionPage() {
         if (ms?.length > 0) setSelectedModelId(ms[0].id);
       })
       .catch(console.error);
-    return () => stopCamera();
+    listTemplates()
+      .then((ts) => setTemplates(ts || []))
+      .catch(() => {});
+
+    let eventSource = null;
+    try {
+      eventSource = new EventSource(`http://localhost:8000/api/integrations/events`, {
+        withCredentials: true,
+      });
+      eventSource.onmessage = (e) => {
+        try {
+          const evt = JSON.parse(e.data);
+          setLiveEvents((prev) => [...prev.slice(-49), evt]);
+        } catch {}
+      };
+      eventSource.onerror = () => {};
+    } catch {}
+
+    return () => {
+      stopCamera();
+      if (eventSource) eventSource.close();
+    };
   }, []);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [liveEvents]);
+
+  const loadTemplate = (templateId) => {
+    if (!templateId) {
+      setActiveTemplate(null);
+      return;
+    }
+    const t = templates.find((t) => t.id === templateId);
+    if (!t) return;
+    setActiveTemplate(t);
+    if (t.model_id) setSelectedModelId(t.model_id);
+    if (t.threshold != null) setThreshold(Math.round(t.threshold * 100));
+  };
 
   const startCamera = async () => {
     try {
@@ -253,6 +294,48 @@ export default function LiveInspectionPage() {
 
         {/* Controls Panel */}
         <div className="w-full lg:w-72 flex flex-col gap-4">
+          {/* Template Selector */}
+          {templates.length > 0 && (
+            <div className="vv-card p-4">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
+                <span className="material-symbols-outlined text-[14px] align-middle mr-1">bookmark</span>
+                Load Template
+              </label>
+              <select
+                value={activeTemplate?.id || ""}
+                onChange={(e) => loadTemplate(e.target.value)}
+              >
+                <option value="">— Manual Configuration —</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}{t.line_name ? ` (${t.line_name})` : ""}
+                  </option>
+                ))}
+              </select>
+              {activeTemplate && (
+                <div className="mt-2 p-2 rounded text-[10px]" style={{background:"rgba(56,139,253,0.08)", border:"1px solid rgba(56,139,253,0.2)"}}>
+                  <div className="flex items-center gap-1 mb-1" style={{color:"var(--clr-accent)"}}>
+                    <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                    <strong>Template active</strong>
+                  </div>
+                  {activeTemplate.description && (
+                    <p style={{color:"var(--clr-text-sub)"}}>{activeTemplate.description}</p>
+                  )}
+                  {activeTemplate.integrations?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {activeTemplate.integrations.map((intg) => (
+                        <span key={intg.id} className="px-1.5 py-0.5 rounded text-[9px] font-medium"
+                          style={{background:"var(--clr-surface-mid)", color:"var(--clr-text-sub)"}}>
+                          {intg.type === "webhook" ? "⚡" : "📡"} {intg.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Model Selector */}
           <div className="vv-card p-4">
             <label className="block text-[11px] font-semibold uppercase tracking-wider mb-2" style={{color:"var(--clr-text-muted)"}}>
@@ -348,6 +431,88 @@ export default function LiveInspectionPage() {
                 </li>
               ))}
             </ol>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Event Monitor (Terminal) */}
+      <div className="flex flex-col mt-6">
+        <h3 className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--clr-text-sub)" }}>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
+            Live Event Monitor
+          </span>
+        </h3>
+
+        <div
+          className="vv-card flex-1 flex flex-col overflow-hidden"
+          style={{ height: 250, background: "#0d1117" }}
+        >
+          {/* Terminal Header */}
+          <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ background: "#161b22", borderBottom: "1px solid #30363d" }}>
+            <div className="flex gap-1.5">
+              <span className="w-3 h-3 rounded-full" style={{ background: "#ff5f57" }} />
+              <span className="w-3 h-3 rounded-full" style={{ background: "#febc2e" }} />
+              <span className="w-3 h-3 rounded-full" style={{ background: "#28c840" }} />
+            </div>
+            <span className="text-[11px] font-mono ml-2" style={{ color: "#8b949e" }}>verivision-integration-monitor</span>
+          </div>
+
+          {/* Terminal Body */}
+          <div className="flex-1 overflow-y-auto p-4 font-mono text-xs leading-relaxed" style={{ color: "#c9d1d9" }}>
+            {liveEvents.length === 0 ? (
+              <div className="text-center py-8" style={{ color: "#484f58" }}>
+                <p>Waiting for integration events...</p>
+                <p className="mt-1 text-[10px]">Events will appear here when inspections trigger integrations.</p>
+              </div>
+            ) : (
+              liveEvents.map((evt, i) => (
+                <div key={i} className="mb-2 flex gap-2">
+                  <span style={{ color: "#484f58" }}>
+                    [{evt.timestamp ? new Date(evt.timestamp).toLocaleTimeString() : "—"}]
+                  </span>
+                  <span
+                    style={{
+                      color:
+                        evt.status === "success"
+                          ? "#3fb950"
+                          : evt.status === "failed"
+                          ? "#f85149"
+                          : "#d29922",
+                    }}
+                  >
+                    {evt.status === "success" ? "✓" : evt.status === "failed" ? "✗" : "⚡"}
+                  </span>
+                  <span>
+                    <span style={{ color: "#79c0ff" }}>{evt.integration_name}</span>
+                    {" "}
+                    <span style={{ color: "#8b949e" }}>({evt.integration_type})</span>
+                    {" → "}
+                    <span
+                      style={{
+                        color:
+                          evt.verdict === "NG"
+                            ? "#f85149"
+                            : evt.verdict === "OK"
+                            ? "#3fb950"
+                            : evt.verdict === "TEST"
+                            ? "#d29922"
+                            : "#8b949e",
+                      }}
+                    >
+                      {evt.verdict}
+                    </span>
+                    {evt.confidence != null && (
+                      <span style={{ color: "#8b949e" }}> ({(evt.confidence * 100).toFixed(1)}%)</span>
+                    )}
+                  </span>
+                </div>
+              ))
+            )}
+            <div ref={logEndRef} />
           </div>
         </div>
       </div>

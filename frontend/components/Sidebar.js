@@ -13,6 +13,7 @@ const adminNav = [
   {href: "/results",  label: "Results",         icon: "analytics"},
   {href: "/alerts",   label: "Alerts",          icon: "notifications"},
   {href: "/integrations", label: "Integrations", icon: "hub"},
+  {href: "/templates",    label: "Templates",    icon: "bookmark"},
   {href: "/users",    label: "Users",           icon: "group"},
 ];
 const inspectorNav = [

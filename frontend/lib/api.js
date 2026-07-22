@@ -350,3 +350,24 @@ export async function testIntegration(id) {
 export async function getIntegrationLogs(limit = 50) {
   return apiGet(`/api/integrations/logs?limit=${limit}`);
 }
+
+// ─── Templates ────────────────────────────────────────
+export async function listTemplates() {
+  return apiGet('/api/templates/');
+}
+
+export async function getTemplate(id) {
+  return apiGet(`/api/templates/${id}`);
+}
+
+export async function createTemplate(data) {
+  return apiPost('/api/templates/', data);
+}
+
+export async function updateTemplate(id, data) {
+  return apiPut(`/api/templates/${id}`, data);
+}
+
+export async function deleteTemplate(id) {
+  return apiDelete(`/api/templates/${id}`);
+}
