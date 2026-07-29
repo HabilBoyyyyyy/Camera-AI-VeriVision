@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useRef, useCallback, useEffect} from "react";
-import {addImagesToDataset, saveAnnotations} from "@/lib/api";
+import {addImagesToDataset, saveAnnotations, fetchDataset} from "@/lib/api";
 import ImageLabeler from "@/components/ImageLabeler";
 
 /**
@@ -25,6 +25,24 @@ export default function CameraCapture({datasetId, currentPath = "", onClose, onS
   const [saving, setSaving] = useState(false);
   const [facingMode, setFacingMode] = useState("environment");
   const [resolution, setResolution] = useState(null);
+
+  // Dataset info for auto-split
+  const [datasetInfo, setDatasetInfo] = useState(null);
+  const [targetClass, setTargetClass] = useState("");
+
+  useEffect(() => {
+    fetchDataset(datasetId).then(info => {
+      setDatasetInfo(info);
+      if (info.task_type === "classification") {
+        try {
+          const classes = JSON.parse(info.classes || '["OK", "NG"]');
+          if (classes.length > 0) setTargetClass(classes[0]);
+        } catch {
+          setTargetClass("OK");
+        }
+      }
+    }).catch(console.error);
+  }, [datasetId]);
 
   // Labeler state
   const [labelerIdx, setLabelerIdx] = useState(-1); // index of capture being labeled
@@ -108,20 +126,44 @@ export default function CameraCapture({datasetId, currentPath = "", onClose, onS
     if (captures.length === 0) return;
     setSaving(true);
     try {
-      const formData = new FormData();
-      formData.append("path", currentPath);
-      captures.forEach((cap) => {
-        formData.append("files", cap.blob, cap.filename);
+      const trainCaptures = [];
+      const validCaptures = [];
+      captures.forEach(cap => {
+        if (Math.random() < 0.8) trainCaptures.push(cap);
+        else validCaptures.push(cap);
       });
-      await addImagesToDataset(datasetId, formData);
 
-      // Save annotations for captures that have them
-      for (const cap of captures) {
-        if (cap.annotations && cap.annotations.length > 0) {
-          const relPath = currentPath ? `${currentPath}${cap.filename}` : cap.filename;
-          await saveAnnotations(datasetId, relPath, cap.annotations);
+      const uploadGroup = async (groupCaptures, splitFolder) => {
+        if (groupCaptures.length === 0) return;
+        const formData = new FormData();
+        
+        let pathStr = currentPath;
+        // Auto-split into train/valid if at root
+        if (!currentPath && datasetInfo) {
+          if (datasetInfo.task_type === "classification") {
+            pathStr = `${splitFolder}/${targetClass}/`;
+          } else {
+            pathStr = `${splitFolder}/images/`;
+          }
         }
-      }
+        
+        formData.append("path", pathStr);
+        groupCaptures.forEach((cap) => {
+          formData.append("files", cap.blob, cap.filename);
+        });
+        await addImagesToDataset(datasetId, formData);
+
+        // Save annotations for captures that have them
+        for (const cap of groupCaptures) {
+          if (cap.annotations && cap.annotations.length > 0) {
+            const relPath = pathStr ? `${pathStr}${cap.filename}` : cap.filename;
+            await saveAnnotations(datasetId, relPath, cap.annotations);
+          }
+        }
+      };
+
+      await uploadGroup(trainCaptures, "train");
+      await uploadGroup(validCaptures, "valid");
 
       captures.forEach(c => URL.revokeObjectURL(c.url));
       setCaptures([]);
@@ -243,6 +285,29 @@ export default function CameraCapture({datasetId, currentPath = "", onClose, onS
         display: "flex", alignItems: "center", justifyContent: "center", gap: 20,
         padding: "16px 20px", background: "rgba(0,0,0,0.6)",
       }}>
+        {datasetInfo?.task_type === "classification" && !currentPath && (
+          <div style={{display: "flex", alignItems: "center", gap: 8, marginRight: 10}}>
+            <label style={{color:"rgba(255,255,255,0.7)", fontSize:11, fontWeight:700, letterSpacing:".05em"}}>CLASS:</label>
+            <select
+              value={targetClass}
+              onChange={e => setTargetClass(e.target.value)}
+              style={{
+                background: "rgba(255,255,255,0.1)", color: "#fff", border: "1px solid rgba(255,255,255,0.3)",
+                borderRadius: 4, padding: "4px 8px", fontSize: 13, outline: "none", cursor: "pointer"
+              }}
+            >
+              {(() => {
+                try {
+                  const classes = JSON.parse(datasetInfo.classes || '["OK", "NG"]');
+                  return classes.map(c => <option key={c} value={c} style={{background:"#222"}}>{c}</option>);
+                } catch {
+                  return <><option value="OK" style={{background:"#222"}}>OK</option><option value="NG" style={{background:"#222"}}>NG</option></>;
+                }
+              })()}
+            </select>
+          </div>
+        )}
+
         <button onClick={switchCamera} disabled={!isStreaming} style={{
           width: 44, height: 44, borderRadius: "50%", display: "flex",
           alignItems: "center", justifyContent: "center",

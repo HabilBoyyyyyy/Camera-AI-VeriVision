@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useRef, useCallback, useEffect} from "react";
-import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO, generateSmartPolygon, predictBoxPrompt} from "@/lib/api";
+import {saveAnnotations, fetchAnnotations, fetchDatasetAnnotations, exportAnnotationsYOLO, generateSmartPolygon, predictBoxPrompt, fetchDatasetImages, hasAnnotations} from "@/lib/api";
 
 /*
  * ─── Colour palette for annotation classes ───────────
@@ -50,6 +50,16 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
   const [boxPromptLoading, setBoxPromptLoading] = useState(false);
   const [boxPromptPredictions, setBoxPromptPredictions] = useState([]);
   const [boxPromptThreshold, setBoxPromptThreshold] = useState(0.4);
+  const [lastPromptBbox, setLastPromptBbox] = useState(null);
+  
+  // Auto-label state
+  const [autoLabeling, setAutoLabeling] = useState(false);
+  const [autoLabelProgress, setAutoLabelProgress] = useState({current: 0, total: 0});
+  const [autoLabelBatch, setAutoLabelBatch] = useState(null);
+  const [autoLabelIndex, setAutoLabelIndex] = useState(0);
+
+  const currentImageUrl = autoLabelBatch ? autoLabelBatch[autoLabelIndex].url : imageUrl;
+  const currentFilename = autoLabelBatch ? autoLabelBatch[autoLabelIndex].filename : filename;
 
   // Drawing state
   const [drawing, setDrawing] = useState(false);
@@ -80,14 +90,16 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       setImgLoaded(true);
     };
     img.onerror = () => {
-      console.error("Failed to load image:", imageUrl);
+      console.error("Failed to load image:", currentImageUrl);
       setImgError(true);
     };
-    img.src = imageUrl;
-  }, [imageUrl]);
+    img.src = currentImageUrl;
+  }, [currentImageUrl]);
 
   // ── Load existing annotations ────────────────────
   useEffect(() => {
+    if (autoLabelBatch) return; // Skip if in batch review mode
+
     if (initialAnnotations && initialAnnotations.length > 0) {
       setAnnotations(initialAnnotations);
       const names = new Set(datasetClasses?.length > 0 ? datasetClasses : ["OK", "NG"]);
@@ -95,7 +107,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
       setClassNames(Array.from(names));
     } else if (!returnAnnotations) {
       // First try localStorage annotations
-      fetchAnnotations(datasetId, filename).then(data => {
+      fetchAnnotations(datasetId, currentFilename).then(data => {
         if (data?.length > 0) {
           setAnnotations(data);
           const names = new Set(datasetClasses?.length > 0 ? datasetClasses : ["OK", "NG"]);
@@ -103,7 +115,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
           setClassNames(Array.from(names));
         } else {
           // Fallback: try fetching YOLO annotations from backend
-          fetchDatasetAnnotations(datasetId, filename).then(result => {
+          fetchDatasetAnnotations(datasetId, currentFilename).then(result => {
             if (result?.classes?.length > 0) {
               const names = new Set(result.classes);
               setClassNames(Array.from(names));
@@ -122,32 +134,12 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
                 label: a.label,
               }));
               setAnnotations(pixelAnns);
-            } else if (result?.annotations?.length > 0) {
-              // Image not loaded yet — wait for it and then convert
-              const waitForImg = setInterval(() => {
-                if (imgRef.current?.naturalWidth) {
-                  clearInterval(waitForImg);
-                  const iw = imgRef.current.naturalWidth;
-                  const ih = imgRef.current.naturalHeight;
-                  const pixelAnns = result.annotations.map(a => ({
-                    type: "box",
-                    x: Math.round((a.cx - a.w / 2) * iw),
-                    y: Math.round((a.cy - a.h / 2) * ih),
-                    w: Math.round(a.w * iw),
-                    h: Math.round(a.h * ih),
-                    label: a.label,
-                  }));
-                  setAnnotations(pixelAnns);
-                }
-              }, 100);
-              // Cleanup after 5 seconds max
-              setTimeout(() => clearInterval(waitForImg), 5000);
             }
           }).catch(() => {});
         }
       });
     }
-  }, [datasetId, filename]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [datasetId, currentFilename, initialAnnotations, returnAnnotations, datasetClasses, autoLabelBatch]);
 
   // ── Canvas dimensions ─────────────────────────────
   const getCanvasSize = useCallback(() => {
@@ -431,6 +423,7 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
         } else if (tool === "box-prompt") {
           setBoxPromptLoading(true);
           const promptBbox = {x, y, w, h};
+          setLastPromptBbox(promptBbox);
           predictBoxPrompt(datasetId, filename, promptBbox, activeClass, 0.15).then(data => {
             if (data.predictions && data.predictions.length > 0) {
               setBoxPromptPredictions(data.predictions);
@@ -603,6 +596,111 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
     URL.revokeObjectURL(url);
   };
 
+  // ── Auto-Label Dataset ────────────────────────────
+  const navigateBatch = (dir) => {
+    if (!autoLabelBatch) return;
+    const updatedBatch = [...autoLabelBatch];
+    updatedBatch[autoLabelIndex].annotations = annotations;
+    setAutoLabelBatch(updatedBatch);
+
+    const nextIdx = autoLabelIndex + dir;
+    if (nextIdx >= 0 && nextIdx < autoLabelBatch.length) {
+      setAutoLabelIndex(nextIdx);
+      setAnnotations(updatedBatch[nextIdx].annotations);
+    }
+  };
+
+  const saveBatch = async () => {
+    setSaving(true);
+    try {
+      const finalBatch = [...autoLabelBatch];
+      finalBatch[autoLabelIndex].annotations = annotations;
+      for (const item of finalBatch) {
+        await saveAnnotations(datasetId, item.filename, item.annotations);
+      }
+      alert("Batch saved successfully!");
+      setAutoLabelBatch(null);
+      if (onSaved) onSaved();
+      onClose();
+    } catch (err) {
+      alert("Failed to save batch: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAutoLabelDataset = async () => {
+    if (!lastPromptBbox) return;
+    
+    // 1. Accept current image predictions first
+    const valid = boxPromptPredictions.filter(p => p.confidence >= boxPromptThreshold);
+    let newAnnotations = [...annotations];
+    if (valid.length > 0) {
+      pushHistory([...annotations]);
+      const newAnns = valid.map(p => ({
+        type: "box", x: p.x, y: p.y, w: p.w, h: p.h, label: p.label
+      }));
+      newAnnotations = [...annotations, ...newAnns];
+    }
+    setBoxPromptPredictions([]);
+
+    // 2. Auto-label loop
+    setAutoLabeling(true);
+    try {
+      const images = await fetchDatasetImages(datasetId);
+      // Only process unannotated images (checked both via backend flag and localStorage)
+      const toLabel = images.filter(img => img.filename !== filename && !img.annotated && !hasAnnotations(datasetId, img.filename));
+      
+      const batch = [];
+      // Add current image to batch
+      batch.push({
+        filename: filename,
+        url: imageUrl,
+        annotations: newAnnotations
+      });
+
+      if (toLabel.length > 0) {
+        setAutoLabelProgress({current: 0, total: toLabel.length});
+        for (let i = 0; i < toLabel.length; i++) {
+          const img = toLabel[i];
+          setAutoLabelProgress({current: i + 1, total: toLabel.length});
+          try {
+            const res = await predictBoxPrompt(datasetId, img.filename, lastPromptBbox, activeClass, boxPromptThreshold, filename);
+            if (res.predictions && res.predictions.length > 0) {
+              const validPreds = res.predictions.filter(p => p.confidence >= boxPromptThreshold);
+              if (validPreds.length > 0) {
+                const anns = validPreds.map(p => ({
+                  type: "box", x: p.x, y: p.y, w: p.w, h: p.h, label: p.label
+                }));
+                batch.push({
+                  filename: img.filename,
+                  url: img.url,
+                  annotations: anns
+                });
+              }
+            }
+          } catch (e) {
+            console.warn("Auto-label failed for", img.filename, e);
+          }
+        }
+      }
+      
+      if (batch.length > 1) {
+        setAutoLabelBatch(batch);
+        setAutoLabelIndex(0);
+        setAnnotations(batch[0].annotations);
+      } else {
+        alert("No objects found in other images. Saving current image only.");
+        setAnnotations(newAnnotations);
+        if (!returnAnnotations) await saveAnnotations(datasetId, filename, newAnnotations);
+      }
+    } catch (e) {
+      alert("Failed to auto-label: " + e.message);
+    } finally {
+      setAutoLabeling(false);
+    }
+  };
+
   // ── Add class ─────────────────────────────────────
   const addClass = () => {
     const name = newClassName.trim();
@@ -617,88 +715,115 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
     <div className="labeler-overlay">
       {/* ── Toolbar ── */}
       <div className="labeler-toolbar">
-        <button onClick={onClose} className="labeler-tool-btn" title="Close (Esc)">
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>close</span>
-        </button>
+        {autoLabelBatch ? (
+          <>
+            <button onClick={() => setAutoLabelBatch(null)} className="labeler-tool-btn" title="Discard Batch">
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>close</span>
+              Discard
+            </button>
+            <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 12px"}} />
+            <div style={{display: "flex", alignItems: "center", gap: 12, fontWeight: 600, fontSize: 13, color: "var(--clr-text)"}}>
+              <span style={{color: "var(--clr-accent-alt, #673ab7)"}}>Reviewing Auto-Labels</span>
+              <button onClick={() => navigateBatch(-1)} disabled={autoLabelIndex === 0} className="btn-outline" style={{padding: "4px 8px"}}>
+                <span className="material-symbols-outlined" style={{fontSize: 16}}>chevron_left</span>
+              </button>
+              <span>{autoLabelIndex + 1} / {autoLabelBatch.length}</span>
+              <button onClick={() => navigateBatch(1)} disabled={autoLabelIndex === autoLabelBatch.length - 1} className="btn-outline" style={{padding: "4px 8px"}}>
+                <span className="material-symbols-outlined" style={{fontSize: 16}}>chevron_right</span>
+              </button>
+            </div>
+            <div style={{flex: 1}} />
+            <button className="btn-primary" onClick={saveBatch} disabled={saving} style={{padding: "6px 16px", fontSize: 12, background: "var(--clr-accent-alt, #673ab7)"}}>
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>{saving ? "hourglass_top" : "done_all"}</span>
+              {saving ? "Saving…" : `Accept & Save All`}
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={onClose} className="labeler-tool-btn" title="Close (Esc)">
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>close</span>
+            </button>
 
-        <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
+            <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
 
-        <button
-          className={`labeler-tool-btn ${tool === "select" ? "active" : ""}`}
-          onClick={() => { setTool("select"); setDrawing(false); setPolyPoints([]); }}
-          title="Select (V)"
-        >
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>near_me</span>
-          Select
-        </button>
-        <button
-          className={`labeler-tool-btn ${tool === "hand" ? "active" : ""}`}
-          onClick={() => { setTool("hand"); setDrawing(false); setPolyPoints([]); }}
-          title="Pan (H)"
-        >
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>pan_tool</span>
-          Pan
-        </button>
-        <button
-          className={`labeler-tool-btn ${tool === "box" ? "active" : ""}`}
-          onClick={() => { setTool("box"); setPolyPoints([]); }}
-          title="Bounding Box (B)"
-        >
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>crop_free</span>
-          Box
-        </button>
-        <button
-          className={`labeler-tool-btn ${tool === "polygon" ? "active" : ""}`}
-          onClick={() => { setTool("polygon"); setDrawing(false); }}
-          title="Polygon (P)"
-        >
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>polyline</span>
-          Polygon
-        </button>
-        <button
-          className={`labeler-tool-btn ${tool === "smart-polygon" ? "active" : ""}`}
-          onClick={() => { setTool("smart-polygon"); setDrawing(false); setPolyPoints([]); }}
-          title="Smart Polygon (M)"
-        >
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>auto_fix_high</span>
-          Smart Poly
-        </button>
-        <button
-          className={`labeler-tool-btn ${tool === "box-prompt" ? "active" : ""}`}
-          onClick={() => { setTool("box-prompt"); setDrawing(false); setPolyPoints([]); }}
-          title="Box Prompt AI (Shift+B)"
-        >
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>smart_toy</span>
-          Box Prompt
-        </button>
+            <button
+              className={`labeler-tool-btn ${tool === "select" ? "active" : ""}`}
+              onClick={() => { setTool("select"); setDrawing(false); setPolyPoints([]); }}
+              title="Select (V)"
+            >
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>near_me</span>
+              Select
+            </button>
+            <button
+              className={`labeler-tool-btn ${tool === "hand" ? "active" : ""}`}
+              onClick={() => { setTool("hand"); setDrawing(false); setPolyPoints([]); }}
+              title="Pan (H)"
+            >
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>pan_tool</span>
+              Pan
+            </button>
+            <button
+              className={`labeler-tool-btn ${tool === "box" ? "active" : ""}`}
+              onClick={() => { setTool("box"); setPolyPoints([]); }}
+              title="Bounding Box (B)"
+            >
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>crop_free</span>
+              Box
+            </button>
+            <button
+              className={`labeler-tool-btn ${tool === "polygon" ? "active" : ""}`}
+              onClick={() => { setTool("polygon"); setDrawing(false); }}
+              title="Polygon (P)"
+            >
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>polyline</span>
+              Polygon
+            </button>
+            <button
+              className={`labeler-tool-btn ${tool === "smart-polygon" ? "active" : ""}`}
+              onClick={() => { setTool("smart-polygon"); setDrawing(false); setPolyPoints([]); }}
+              title="Smart Polygon (M)"
+            >
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>auto_fix_high</span>
+              Smart Poly
+            </button>
+            <button
+              className={`labeler-tool-btn ${tool === "box-prompt" ? "active" : ""}`}
+              onClick={() => { setTool("box-prompt"); setDrawing(false); setPolyPoints([]); }}
+              title="Box Prompt AI (Shift+B)"
+            >
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>smart_toy</span>
+              Box Prompt
+            </button>
 
-        <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
+            <div style={{width: 1, height: 24, background: "var(--clr-border)", margin: "0 4px"}} />
 
-        {/* Zoom controls */}
-        <button className="labeler-tool-btn" onClick={() => handleZoomChange(0.25)} title="Zoom in">
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>zoom_in</span>
-        </button>
-        <span style={{fontSize: 11, fontWeight: 700, color: "var(--clr-text-sub)", minWidth: 40, textAlign: "center"}}>
-          {Math.round(zoom * 100)}%
-        </span>
-        <button className="labeler-tool-btn" onClick={() => handleZoomChange(-0.25)} title="Zoom out">
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>zoom_out</span>
-        </button>
-        <button className="labeler-tool-btn" onClick={() => setView({zoom: 1, pan: {x: 0, y: 0}})} title="Reset view">
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>fit_screen</span>
-        </button>
+            {/* Zoom controls */}
+            <button className="labeler-tool-btn" onClick={() => handleZoomChange(0.25)} title="Zoom in">
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>zoom_in</span>
+            </button>
+            <span style={{fontSize: 11, fontWeight: 700, color: "var(--clr-text-sub)", minWidth: 40, textAlign: "center"}}>
+              {Math.round(zoom * 100)}%
+            </span>
+            <button className="labeler-tool-btn" onClick={() => handleZoomChange(-0.25)} title="Zoom out">
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>zoom_out</span>
+            </button>
+            <button className="labeler-tool-btn" onClick={() => setView({zoom: 1, pan: {x: 0, y: 0}})} title="Reset view">
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>fit_screen</span>
+            </button>
 
-        <div style={{flex: 1}} />
+            <div style={{flex: 1}} />
 
-        {/* Save & Export */}
-        <button className="labeler-tool-btn" onClick={handleExport} disabled={annotations.length === 0} title="Export YOLO .txt">
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>download</span>
-          YOLO
-        </button>
-        <button className="btn-primary" onClick={handleSave} disabled={saving} style={{padding: "6px 16px", fontSize: 12}}>
-          <span className="material-symbols-outlined" style={{fontSize: 16}}>{saving ? "hourglass_top" : "save"}</span>
-          {saving ? "Saving…" : `Save (${annotations.length})`}
-        </button>
+            {/* Save & Export */}
+            <button className="labeler-tool-btn" onClick={handleExport} disabled={annotations.length === 0} title="Export YOLO .txt">
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>download</span>
+              YOLO
+            </button>
+            <button className="btn-primary" onClick={handleSave} disabled={saving} style={{padding: "6px 16px", fontSize: 12}}>
+              <span className="material-symbols-outlined" style={{fontSize: 16}}>{saving ? "hourglass_top" : "save"}</span>
+              {saving ? "Saving…" : `Save (${annotations.length})`}
+            </button>
+          </>
+        )}
       </div>
 
       {/* ── Main area ── */}
@@ -730,17 +855,17 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
           )}
           
           {/* Smart Polygon / Box Prompt Loading Overlay */}
-          {(smartPolyLoading || boxPromptLoading) && (
+          {(smartPolyLoading || boxPromptLoading || autoLabeling) && (
             <div style={{position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", zIndex: 10, flexDirection: "column"}}>
               <div className="w-8 h-8 border-4 rounded-full animate-spin mb-2" style={{borderColor: "rgba(255,255,255,0.2)", borderTopColor: "white"}} />
-              <p style={{fontWeight: 600, fontSize: 13}}>
-                {boxPromptLoading ? "Scanning for similar objects…" : "Generating Smart Polygon…"}
+              <p style={{fontWeight: 600, fontSize: 13, textAlign: "center"}}>
+                {autoLabeling ? `Auto-Labeling Dataset (${autoLabelProgress.current} / ${autoLabelProgress.total})…\nFinding objects...` : boxPromptLoading ? "Scanning for similar objects…" : "Generating Smart Polygon…"}
               </p>
             </div>
           )}
 
           {/* Roboflow-style Box Prompt Action Bar */}
-          {boxPromptPredictions.length > 0 && (
+          {boxPromptPredictions.length > 0 && !autoLabelBatch && (
             <div style={{
               position: "absolute",
               top: 16,
@@ -806,6 +931,18 @@ export default function ImageLabeler({imageUrl, filename, datasetId, onClose, on
               >
                 Accept All
               </button>
+
+              {/* Auto-Label Dataset */}
+              {!returnAnnotations && (
+                <button
+                  className="btn-primary"
+                  style={{padding: "4px 14px", fontSize: 11, background: "var(--clr-accent-alt, #673ab7)", borderColor: "var(--clr-accent-alt, #673ab7)"}}
+                  onClick={handleAutoLabelDataset}
+                  title="Apply this prompt to all unannotated images in this dataset and review before saving"
+                >
+                  Auto-Label Dataset
+                </button>
+              )}
 
               {/* Discard */}
               <button

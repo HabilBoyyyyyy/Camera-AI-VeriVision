@@ -191,9 +191,25 @@ def get_dataset_images(dataset_id: str, db: Session = Depends(get_db), user: mod
     for img_path in root.rglob("*"):
         if img_path.is_file() and img_path.suffix.lower() in IMG_EXTS:
             rel_path = img_path.relative_to(root)
+            filename_str = str(rel_path).replace("\\", "/")
+            
+            is_annotated = False
+            if ds.task_type.lower() != "classification":
+                txt_path = img_path.with_suffix(".txt")
+                if txt_path.exists():
+                    is_annotated = True
+                else:
+                    parts = list(rel_path.parts)
+                    if len(parts) >= 2 and parts[-2] == "images":
+                        parts[-2] = "labels"
+                        label_rel_path = Path(*parts).with_suffix(".txt")
+                        if (root / label_rel_path).exists():
+                            is_annotated = True
+
             images.append({
-                "filename": str(rel_path),
-                "url": f"/data/datasets/{dataset_id}/{str(rel_path).replace(os.sep, '/')}",
+                "filename": filename_str,
+                "url": f"/data/datasets/{dataset_id}/{filename_str}",
+                "annotated": is_annotated
             })
     return images
 
@@ -219,7 +235,7 @@ def delete_dataset_image(
     return {"status": "deleted"}
 
 
-from typing import List
+from typing import List, Optional
 
 @router.post("/{dataset_id}/add-images")
 async def add_dataset_images(
@@ -498,6 +514,7 @@ class BoxPromptRequest(BaseModel):
     prompt_bbox: dict  # {x, y, w, h}
     label: str = "object"
     threshold: float = 0.4
+    source_filename: Optional[str] = None  # Original image where the box was drawn
 
 # Cache for YOLO-World model
 _yolo_world_model = None
@@ -574,7 +591,17 @@ async def box_prompt_predict(
 
     # 2. Fallback to Multi-Scale Template Matching if YOLO-World produced no predictions
     if not predictions:
-        template = img[py:py+ph, px:px+pw]
+        template = None
+        if request.source_filename and request.source_filename != request.filename:
+            src_path = Path(ds.folder_path) / request.source_filename
+            if src_path.exists():
+                src_img = cv2.imread(str(src_path))
+                if src_img is not None:
+                    template = src_img[py:py+ph, px:px+pw]
+        
+        if template is None:
+            template = img[py:py+ph, px:px+pw]
+            
         boxes = []
         scores = []
         scales = [0.75, 0.88, 1.0, 1.12, 1.25]

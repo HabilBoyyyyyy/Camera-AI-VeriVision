@@ -204,7 +204,7 @@ export default function LiveInspectionPage() {
       setResult(res);
       if (res?.image_path) {
         setPreviewSrc(`http://localhost:8000${res.image_path}`);
-        stopCamera();
+        // Camera keeps running
       }
     } catch (e) {
       console.error(e);
@@ -358,7 +358,7 @@ export default function LiveInspectionPage() {
           <div className="absolute inset-0 pattern-grid opacity-40" />
 
           {isStreaming && (
-            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-10" />
+            <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-contain z-10" />
           )}
           {!isStreaming && previewSrc && (
             <>
@@ -462,32 +462,41 @@ export default function LiveInspectionPage() {
                 <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{color:"var(--clr-text-muted)"}}>
                   Inspection Result
                 </h3>
-                <div
-                  className="p-6 rounded-lg"
-                  style={{
-                    background: verdictInfo(result.verdict).bg,
-                    border: `1px solid ${verdictInfo(result.verdict).border}`,
-                  }}
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="text-4xl font-black font-mono" style={{color: verdictInfo(result.verdict).color}}>
-                      {verdictInfo(result.verdict).label}
+                <div className="flex flex-col md:flex-row gap-6">
+                  {previewSrc && (
+                    <div className="w-full md:w-1/3 shrink-0 bg-black/40 rounded-lg overflow-hidden border border-[var(--clr-border)] flex items-center justify-center relative min-h-[120px]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={previewSrc} alt="Snapshot" className="max-h-[160px] w-auto object-contain" />
+                      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 text-white text-[9px] rounded font-mono uppercase tracking-widest">Snapshot</div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs font-bold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>Confidence</div>
-                      <div className="text-2xl font-bold font-mono mt-1" style={{color:"var(--clr-text)"}}>
-                        {(result.confidence * 100).toFixed(1)}%
+                  )}
+                  <div
+                    className="p-6 rounded-lg flex-1 flex flex-col justify-center"
+                    style={{
+                      background: verdictInfo(result.verdict).bg,
+                      border: `1px solid ${verdictInfo(result.verdict).border}`,
+                    }}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="text-4xl font-black font-mono" style={{color: verdictInfo(result.verdict).color}}>
+                        {verdictInfo(result.verdict).label}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-bold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>Confidence</div>
+                        <div className="text-2xl font-bold font-mono mt-1" style={{color:"var(--clr-text)"}}>
+                          {(result.confidence * 100).toFixed(1)}%
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="pass-rate-bar h-2 rounded-full overflow-hidden" style={{background: "var(--clr-surface-mid)"}}>
-                    <div
-                      className="h-full transition-all duration-500 ease-out"
-                      style={{
-                        width: `${result.confidence * 100}%`,
-                        background: verdictInfo(result.verdict).color,
-                      }}
-                    />
+                    <div className="pass-rate-bar h-2 rounded-full overflow-hidden" style={{background: "var(--clr-surface-mid)"}}>
+                      <div
+                        className="h-full transition-all duration-500 ease-out"
+                        style={{
+                          width: `${result.confidence * 100}%`,
+                          background: verdictInfo(result.verdict).color,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
