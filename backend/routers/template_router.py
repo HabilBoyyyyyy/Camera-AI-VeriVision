@@ -26,6 +26,10 @@ class TemplateCreate(BaseModel):
     threshold: float = 0.7
     integration_ids: list = []
     line_name: Optional[str] = ""
+    camera_ids: list = []
+    camera_type: Optional[str] = ""
+    trigger_type: str = "manual"
+    plc_config: Optional[dict] = None
 
 
 class TemplateUpdate(BaseModel):
@@ -35,11 +39,17 @@ class TemplateUpdate(BaseModel):
     threshold: Optional[float] = None
     integration_ids: Optional[list] = None
     line_name: Optional[str] = None
+    camera_ids: Optional[list] = None
+    camera_type: Optional[str] = None
+    trigger_type: Optional[str] = None
+    plc_config: Optional[dict] = None
 
 
 # ── Helpers ────────────────────────────────────────────
 def _serialize(t: models.InspectionTemplate, db: Session) -> dict:
     integration_ids = json.loads(t.integration_ids_json) if t.integration_ids_json else []
+    camera_ids = json.loads(t.camera_ids_json) if t.camera_ids_json else []
+    plc_config = json.loads(t.plc_config_json) if t.plc_config_json else None
 
     # Resolve model name
     model_name = None
@@ -64,6 +74,10 @@ def _serialize(t: models.InspectionTemplate, db: Session) -> dict:
         "integration_ids": integration_ids,
         "integrations": integration_names,
         "line_name": t.line_name,
+        "camera_ids": camera_ids,
+        "camera_type": t.camera_type,
+        "trigger_type": t.trigger_type,
+        "plc_config": plc_config,
         "created_by": t.created_by,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
@@ -112,6 +126,10 @@ def create_template(
         threshold=body.threshold,
         integration_ids_json=json.dumps(body.integration_ids),
         line_name=body.line_name or "",
+        camera_ids_json=json.dumps(body.camera_ids),
+        camera_type=body.camera_type,
+        trigger_type=body.trigger_type,
+        plc_config_json=json.dumps(body.plc_config) if body.plc_config else None,
         created_by=user.username,
     )
     db.add(t)
@@ -148,6 +166,14 @@ def update_template(
         t.integration_ids_json = json.dumps(body.integration_ids)
     if body.line_name is not None:
         t.line_name = body.line_name
+    if body.camera_ids is not None:
+        t.camera_ids_json = json.dumps(body.camera_ids)
+    if body.camera_type is not None:
+        t.camera_type = body.camera_type
+    if body.trigger_type is not None:
+        t.trigger_type = body.trigger_type
+    if body.plc_config is not None:
+        t.plc_config_json = json.dumps(body.plc_config)
 
     t.updated_at = datetime.utcnow()
     db.commit()

@@ -100,10 +100,10 @@ async def inspect_image(
         
         elif model_record.task_type == "detection" and result.boxes is not None:
             # Detection result
+            all_detections = []
+            highest_conf = 0.0
+            
             if len(result.boxes) > 0:
-                has_ng = False
-                highest_conf = 0.0
-                all_detections = []
                 for box in result.boxes:
                     cls_idx = int(box.cls[0])
                     conf = float(box.conf[0])
@@ -111,31 +111,38 @@ async def inspect_image(
                     if conf > highest_conf:
                         highest_conf = conf
                         
-                    is_ng_cls = any(kw in c_name.lower() for kw in ["ng", "bad", "defect", "fail"])
-                    # If we find an NG object, we mark the whole inspection as NG
-                    # Alternatively, if there's no NG but OK, we can say OK.
-                    if is_ng_cls:
-                        has_ng = True
+                    x1, y1, x2, y2 = [float(v) for v in box.xyxy[0].tolist()]
                     
                     all_detections.append({
                         "class": c_name,
-                        "confidence": conf
+                        "confidence": conf,
+                        "bbox": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
+                        "is_defect": True
                     })
                 
                 details = {
                     "num_detections": len(result.boxes),
-                    "detections": all_detections
+                    "image_width": int(frame.shape[1]),
+                    "image_height": int(frame.shape[0]),
+                    "defect_detections": all_detections,
+                    "all_detections": all_detections,
                 }
                 
                 confidence = highest_conf
-                if has_ng:
+                if highest_conf >= threshold:
                     verdict = "NG"
                 else:
-                    verdict = "OK" if confidence >= threshold else "Uncertain"
+                    verdict = "Uncertain"
             else:
-                verdict = "Uncertain"
+                verdict = "OK"
                 confidence = 0.0
-                details = {"num_detections": 0}
+                details = {
+                    "num_detections": 0,
+                    "image_width": int(frame.shape[1]),
+                    "image_height": int(frame.shape[0]),
+                    "defect_detections": [],
+                    "all_detections": []
+                }
     
     # Save inspection image
     inspection_id = models.generate_uuid()

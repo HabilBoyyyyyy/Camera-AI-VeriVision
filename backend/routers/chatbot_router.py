@@ -23,21 +23,83 @@ class ChatResponse(BaseModel):
     timestamp: str
 
 
-# ── Keyword patterns ──────────────────────────────────────────────────────────
-PATTERNS = {
-    "help": re.compile(r"\b(help|command|what can you do|how to use|guide)\b", re.I),
-    "yield": re.compile(r"\b(yield|pass rate|ok rate|acceptance)\b", re.I),
-    "defect": re.compile(r"\b(defect|ng|fail|reject|bad|defective)\b", re.I),
-    "recent": re.compile(r"\b(recent|latest|last|newest)\b", re.I),
-    "today": re.compile(r"\b(today|24 hour|this day)\b", re.I),
-    "model": re.compile(r"\b(model|network|architecture|weight|trained)\b", re.I),
-    "dataset": re.compile(r"\b(dataset|data set|training data|images|upload)\b", re.I),
-    "training": re.compile(r"\b(training|train|epoch|job|queue)\b", re.I),
-    "summary": re.compile(r"\b(summary|overview|dashboard|report|stats|status)\b", re.I),
-    "uncertain": re.compile(r"\b(uncertain|unsure|low confidence|borderline)\b", re.I),
-    "confidence": re.compile(r"\b(confidence|score|probability|threshold)\b", re.I),
-    "count": re.compile(r"\b(count|how many|total|number of)\b", re.I),
+# ── ML Classifier Setup ───────────────────────────────────────────────────────
+# We use a TF-IDF vectorizer + LogisticRegression to classify user intents
+# instead of the old regex patterns, improving natural language understanding.
+
+TRAINING_DATA = {
+    "help": [
+        "help", "help me", "what can you do", "how to use this", "user guide",
+        "show commands", "what are the commands", "how does this work",
+        "can you help me", "instructions", "what is available", "guide",
+        "tell me what you can do", "show me options", "help menu", "need assistance"
+    ],
+    "yield": [
+        "what is today's yield", "show me the pass rate", "how is the acceptance rate",
+        "yield report for this week", "what percentage passed today", "ok rate this month",
+        "how many passed vs failed", "production yield", "quality rate", "first pass yield",
+        "what is the yield", "tell me the yield", "pass rate today", "yield percentage",
+        "show yield", "current yield", "yield rate", "acceptable rate", "pass vs fail"
+    ],
+    "defect": [
+        "show recent defects", "list ng parts", "any failures today", "defect report",
+        "defective items", "show me ng", "recent fails", "last 10 defects", "what failed",
+        "failed parts", "show defects", "defect list", "ng list", "rejected parts",
+        "show me bad parts", "failures", "did any fail", "recent ng", "show rejected"
+    ],
+    "uncertain": [
+        "show uncertain results", "unsure parts", "low confidence results", "borderline verdicts",
+        "uncertain verdicts", "needs manual check", "show borderline", "what is uncertain",
+        "low confidence", "uncertain items", "list uncertain", "any unsure", "not confident",
+        "borderline cases", "manual review needed", "uncertainty list"
+    ],
+    "count": [
+        "how many inspections today", "total count", "number of inspections", "total parts checked",
+        "how many checked", "count for today", "inspection count", "total items",
+        "how many parts", "total processed", "volume today", "throughput", "count",
+        "how many did we do", "total today", "total scanned"
+    ],
+    "model": [
+        "model status", "check deployed model info", "what model is running", "show models",
+        "trained models", "current model architecture", "model accuracy", "network status",
+        "active model", "model version", "what is the model", "list models", "deployed network",
+        "AI model", "model info", "weights and models"
+    ],
+    "dataset": [
+        "dataset summary", "see all datasets", "what datasets do we have", "training data",
+        "list datasets", "data sets", "images dataset", "upload data", "dataset status",
+        "how many datasets", "dataset info", "show me datasets", "available datasets",
+        "image data", "training images", "dataset list"
+    ],
+    "training": [
+        "training status", "check active training jobs", "is it training", "training queue",
+        "recent training jobs", "train a model", "training progress", "model training",
+        "show training", "training jobs", "epochs left", "training run", "queue status",
+        "training history", "is training done", "job status"
+    ],
+    "summary": [
+        "give me a summary", "full system overview", "dashboard", "report",
+        "system status", "overall status", "summary for today", "show dashboard",
+        "status report", "overview", "system summary", "everything summary",
+        "daily report", "general status", "how is everything", "quick summary"
+    ]
 }
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+
+_vectorizer = TfidfVectorizer(lowercase=True, stop_words='english')
+_clf = LogisticRegression(random_state=42)
+
+_X_texts = []
+_y_labels = []
+for _intent, _examples in TRAINING_DATA.items():
+    for _text in _examples:
+        _X_texts.append(_text)
+        _y_labels.append(_intent)
+
+_X_features = _vectorizer.fit_transform(_X_texts)
+_clf.fit(_X_features, _y_labels)
 
 TIME_PATTERNS = {
     "today": re.compile(r"\b(today|this day)\b", re.I),
@@ -284,42 +346,23 @@ def _handle_summary(db: Session, message: str, **_):
 
 
 def _classify_intent(message: str) -> str:
-    """Classify the user's intent based on keyword patterns."""
-    matched = {}
-    for intent, pattern in PATTERNS.items():
-        m = pattern.search(message)
-        if m:
-            matched[intent] = m.start()
-
-    if not matched:
-        return "unknown"
-
-    # Prioritise: help > specific intents > generic
-    if "help" in matched:
-        return "help"
-
-    # If both "recent" and "defect" matched, it's a defect query
-    if "defect" in matched or ("recent" in matched and "defect" in matched):
-        return "defect"
-    if "uncertain" in matched:
-        return "uncertain"
-    if "yield" in matched:
-        return "yield"
-    if "count" in matched and not any(k in matched for k in ["model", "dataset", "training"]):
-        return "count"
-    if "training" in matched:
-        return "training"
-    if "model" in matched:
-        return "model"
-    if "dataset" in matched:
-        return "dataset"
-    if "summary" in matched:
-        return "summary"
-    if "recent" in matched:
-        return "defect"  # "recent" alone → show recent defects
-
-    # Fallback: pick the first matched
-    return list(matched.keys())[0]
+    """Classify the user's intent using a TF-IDF + LogisticRegression model."""
+    X = _vectorizer.transform([message])
+    probs = _clf.predict_proba(X)[0]
+    
+    top_idx = probs.argmax()
+    top_intent = _clf.classes_[top_idx]
+    confidence = probs[top_idx]
+    
+    if confidence < 0.3:
+        class IntentStr(str):
+            pass
+        res = IntentStr("unknown")
+        if confidence > 0.1:
+            res.hint = f"closest match: {top_intent} at {confidence*100:.0f}% confidence"
+        return res
+    
+    return top_intent
 
 
 HANDLERS = {
@@ -364,6 +407,11 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
         content = handler(db=db, message=message)
     else:
         content = FALLBACK_RESPONSE
+        if getattr(intent, "hint", None):
+            content = content.replace(
+                "I'm not sure I understand that.",
+                f"I'm not sure I understand that ({intent.hint})."
+            )
 
     return ChatResponse(
         id=f"bot_{int(datetime.utcnow().timestamp() * 1000)}",

@@ -19,6 +19,72 @@ export default function LiveInspectionPage() {
   const streamRef = useRef(null);
   const fileRef = useRef(null);
   const logEndRef = useRef(null);
+  const canvasOverlayRef = useRef(null);
+
+  const drawBoundingBoxes = () => {
+    const canvas = canvasOverlayRef.current;
+    const model = models.find((m) => m.id === selectedModelId);
+    if (!canvas || !result || model?.task_type !== "detection") return;
+
+    const detections = result.details?.defect_detections || result.details?.all_detections || [];
+    const origW = result.details?.image_width;
+    const origH = result.details?.image_height;
+    if (!origW || !origH) return;
+
+    const container = canvas.parentElement;
+    if (!container) return;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, cw, ch);
+
+    const imgRatio = origW / origH;
+    const containerRatio = cw / ch;
+    let drawW = cw;
+    let drawH = ch;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (imgRatio > containerRatio) {
+      drawH = cw / imgRatio;
+      offsetY = (ch - drawH) / 2;
+    } else {
+      drawW = ch * imgRatio;
+      offsetX = (cw - drawW) / 2;
+    }
+
+    const scaleX = drawW / origW;
+    const scaleY = drawH / origH;
+
+    detections.forEach(det => {
+      const [x1, y1, x2, y2] = det.bbox;
+      const rx = offsetX + x1 * scaleX;
+      const ry = offsetY + y1 * scaleY;
+      const rw = (x2 - x1) * scaleX;
+      const rh = (y2 - y1) * scaleY;
+
+      ctx.strokeStyle = "rgba(186,26,26,0.8)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+
+      const text = `${det.class} (${(det.confidence * 100).toFixed(1)}%)`;
+      ctx.font = "12px sans-serif";
+      const textWidth = ctx.measureText(text).width;
+      ctx.fillStyle = "rgba(186,26,26,0.8)";
+      ctx.fillRect(rx, ry - 18, textWidth + 8, 18);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(text, rx + 4, ry - 5);
+    });
+  };
+
+  useEffect(() => {
+    drawBoundingBoxes();
+    window.addEventListener("resize", drawBoundingBoxes);
+    return () => window.removeEventListener("resize", drawBoundingBoxes);
+  }, [result, selectedModelId, models]);
 
   useEffect(() => {
     fetchInspectionModels()
@@ -65,11 +131,22 @@ export default function LiveInspectionPage() {
     setActiveTemplate(t);
     if (t.model_id) setSelectedModelId(t.model_id);
     if (t.threshold != null) setThreshold(Math.round(t.threshold * 100));
+    
+    if (t.camera_type && t.camera_ids && t.camera_ids.length > 0) {
+      const firstCamId = t.camera_ids[0];
+      if (/^\d+$/.test(firstCamId)) {
+        startCamera(firstCamId);
+      }
+    }
   };
 
-  const startCamera = async () => {
+  const startCamera = async (deviceId = null) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({video: true});
+      const constraints = { video: true };
+      if (typeof deviceId === "string") {
+        constraints.video = { deviceId: { exact: deviceId } };
+      }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       setIsStreaming(true);
       setResult(null);
@@ -207,9 +284,20 @@ export default function LiveInspectionPage() {
 
         {/* Active Template Badge */}
         {activeTemplate && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium" style={{background:"rgba(56,139,253,0.08)", border:"1px solid rgba(56,139,253,0.2)", color:"var(--clr-accent)"}}>
-            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-            <span>{activeTemplate.name} Active</span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium" style={{background:"rgba(56,139,253,0.08)", border:"1px solid rgba(56,139,253,0.2)", color:"var(--clr-accent)"}}>
+              <span className="material-symbols-outlined text-[14px]">check_circle</span>
+              <span>
+                {activeTemplate.name} Active
+                {activeTemplate.camera_ids?.length > 0 ? ` • ${activeTemplate.camera_ids.join(", ")}` : ""}
+              </span>
+            </div>
+            {activeTemplate.trigger_type === "plc_signal" && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium" style={{background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.2)", color:"#f59e0b"}}>
+                <span className="material-symbols-outlined text-[14px]">bolt</span>
+                <span>PLC Trigger Active</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -273,8 +361,11 @@ export default function LiveInspectionPage() {
             <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover z-10" />
           )}
           {!isStreaming && previewSrc && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewSrc} alt="Preview" className="absolute inset-0 w-full h-full object-contain z-10" />
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={previewSrc} alt="Preview" className="absolute inset-0 w-full h-full object-contain z-10" />
+              <canvas ref={canvasOverlayRef} className="absolute inset-0 w-full h-full z-20 pointer-events-none" />
+            </>
           )}
           {!isStreaming && !previewSrc && (
             <div className="relative z-10 flex flex-col items-center gap-3 text-center">
@@ -364,41 +455,81 @@ export default function LiveInspectionPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         
         {/* Left Column (Wider): Result Card */}
-        <div className="lg:col-span-3 flex flex-col h-full">
+        <div className="lg:col-span-3 flex flex-col h-full gap-6">
           {result ? (
-            <div className="vv-card p-6 h-full flex flex-col justify-center">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{color:"var(--clr-text-muted)"}}>
-                Inspection Result
-              </h3>
-              <div
-                className="p-6 rounded-lg"
-                style={{
-                  background: verdictInfo(result.verdict).bg,
-                  border: `1px solid ${verdictInfo(result.verdict).border}`,
-                }}
-              >
-                <div className="flex justify-between items-center mb-4">
-                  <div className="text-4xl font-black font-mono" style={{color: verdictInfo(result.verdict).color}}>
-                    {verdictInfo(result.verdict).label}
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-bold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>Confidence</div>
-                    <div className="text-2xl font-bold font-mono mt-1" style={{color:"var(--clr-text)"}}>
-                      {(result.confidence * 100).toFixed(1)}%
+            <>
+              <div className="vv-card p-6 flex flex-col justify-center">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{color:"var(--clr-text-muted)"}}>
+                  Inspection Result
+                </h3>
+                <div
+                  className="p-6 rounded-lg"
+                  style={{
+                    background: verdictInfo(result.verdict).bg,
+                    border: `1px solid ${verdictInfo(result.verdict).border}`,
+                  }}
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="text-4xl font-black font-mono" style={{color: verdictInfo(result.verdict).color}}>
+                      {verdictInfo(result.verdict).label}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold uppercase tracking-wider" style={{color:"var(--clr-text-muted)"}}>Confidence</div>
+                      <div className="text-2xl font-bold font-mono mt-1" style={{color:"var(--clr-text)"}}>
+                        {(result.confidence * 100).toFixed(1)}%
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="pass-rate-bar h-2 rounded-full overflow-hidden" style={{background: "var(--clr-surface-mid)"}}>
-                  <div
-                    className="h-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${result.confidence * 100}%`,
-                      background: verdictInfo(result.verdict).color,
-                    }}
-                  />
+                  <div className="pass-rate-bar h-2 rounded-full overflow-hidden" style={{background: "var(--clr-surface-mid)"}}>
+                    <div
+                      className="h-full transition-all duration-500 ease-out"
+                      style={{
+                        width: `${result.confidence * 100}%`,
+                        background: verdictInfo(result.verdict).color,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+
+              {models.find((m) => m.id === selectedModelId)?.task_type === "detection" && (
+                <div className="vv-card p-6 flex-1 flex flex-col overflow-hidden">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wider mb-4" style={{color:"var(--clr-text-muted)"}}>
+                    Defect Regions Detected ({result.details?.defect_detections?.length || 0})
+                  </h3>
+                  <div className="overflow-x-auto overflow-y-auto max-h-[300px]">
+                    <table className="w-full text-left text-sm" style={{color:"var(--clr-text)"}}>
+                      <thead>
+                        <tr className="border-b" style={{borderColor:"var(--clr-border)", color:"var(--clr-text-muted)"}}>
+                          <th className="pb-2 font-medium">Class</th>
+                          <th className="pb-2 font-medium">Confidence</th>
+                          <th className="pb-2 font-medium">Location</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.details?.defect_detections?.length > 0 ? (
+                          result.details.defect_detections.map((det, i) => (
+                            <tr key={i} className="border-b last:border-0" style={{borderColor:"var(--clr-border)"}}>
+                              <td className="py-2.5 font-medium">{det.class}</td>
+                              <td className="py-2.5">{(det.confidence * 100).toFixed(1)}%</td>
+                              <td className="py-2.5 font-mono text-xs" style={{color:"var(--clr-text-sub)"}}>
+                                [{det.bbox.map(Math.round).join(", ")}]
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="3" className="py-4 text-center text-sm" style={{color:"var(--clr-text-muted)"}}>
+                              No defects detected.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="vv-card p-6 h-full flex flex-col items-center justify-center text-center opacity-60 min-h-[200px]">
               <span className="material-symbols-outlined text-4xl mb-3" style={{color: "var(--clr-text-muted)"}}>image_search</span>

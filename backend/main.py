@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from contextlib import asynccontextmanager
 
 from database import engine, Base, SessionLocal
 import models
@@ -13,7 +14,23 @@ from routers import training_router, model_router, inspection_router, result_rou
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="VeriVision API", version="2.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    db = SessionLocal()
+    try:
+        seed_default_users(db)
+        # Auto-migrate: add new columns if missing
+        _auto_migrate_columns(db)
+    finally:
+        db.close()
+    
+    yield
+    
+    # Shutdown
+    pass
+
+app = FastAPI(title="VeriVision API", version="2.0.0", lifespan=lifespan)
 
 # CORS
 app.add_middleware(
@@ -47,35 +64,38 @@ os.makedirs("data/uploads", exist_ok=True)
 app.mount("/data", StaticFiles(directory="data"), name="data")
 
 
-@app.on_event("startup")
-def startup_event():
-    db = SessionLocal()
-    try:
-        seed_default_users(db)
-        # Auto-migrate: add review columns if missing
-        _auto_migrate_review_columns(db)
-    finally:
-        db.close()
-
-
-def _auto_migrate_review_columns(db):
-    """Add review/validation columns to inspection_results if they don't exist."""
+def _auto_migrate_columns(db):
+    """Add new columns to tables if they don't exist."""
     from sqlalchemy import text, inspect as sa_inspect
     inspector = sa_inspect(engine)
-    if "inspection_results" not in inspector.get_table_names():
-        return
-    existing = {col["name"] for col in inspector.get_columns("inspection_results")}
-    migrations = [
-        ("review_verdict", "VARCHAR"),
-        ("review_notes", "TEXT"),
-        ("reviewed_by", "VARCHAR"),
-        ("reviewed_at", "DATETIME"),
-        ("exported_to_dataset", "BOOLEAN DEFAULT 0"),
-    ]
-    for col_name, col_type in migrations:
-        if col_name not in existing:
-            db.execute(text(f"ALTER TABLE inspection_results ADD COLUMN {col_name} {col_type}"))
-            print(f"[MIGRATION] Added column '{col_name}' to inspection_results")
+    
+    if "inspection_results" in inspector.get_table_names():
+        existing = {col["name"] for col in inspector.get_columns("inspection_results")}
+        migrations = [
+            ("review_verdict", "VARCHAR"),
+            ("review_notes", "TEXT"),
+            ("reviewed_by", "VARCHAR"),
+            ("reviewed_at", "DATETIME"),
+            ("exported_to_dataset", "BOOLEAN DEFAULT 0"),
+        ]
+        for col_name, col_type in migrations:
+            if col_name not in existing:
+                db.execute(text(f"ALTER TABLE inspection_results ADD COLUMN {col_name} {col_type}"))
+                print(f"[MIGRATION] Added column '{col_name}' to inspection_results")
+                
+    if "inspection_templates" in inspector.get_table_names():
+        existing = {col["name"] for col in inspector.get_columns("inspection_templates")}
+        migrations = [
+            ("camera_ids_json", "TEXT"),
+            ("camera_type", "VARCHAR"),
+            ("trigger_type", "VARCHAR DEFAULT 'manual'"),
+            ("plc_config_json", "TEXT"),
+        ]
+        for col_name, col_type in migrations:
+            if col_name not in existing:
+                db.execute(text(f"ALTER TABLE inspection_templates ADD COLUMN {col_name} {col_type}"))
+                print(f"[MIGRATION] Added column '{col_name}' to inspection_templates")
+                
     db.commit()
 
 

@@ -109,6 +109,14 @@ class InspectionTemplate(Base):
     threshold = Column(Float, default=0.7)
     integration_ids_json = Column(Text, nullable=True)  # JSON array of integration IDs
     line_name = Column(String, nullable=True)  # e.g. "Line Alpha"
+    
+    # Camera assignment
+    camera_ids_json = Column(Text, nullable=True)     # JSON array: ["cam_0", "cam_line3_02"]
+    camera_type = Column(String, nullable=True)        # "webcam" | "usb" | "ethernet"
+
+    # PLC trigger configuration  
+    trigger_type = Column(String, default="manual")     # "manual" | "plc_signal"
+    plc_config_json = Column(Text, nullable=True)       # JSON: {plc_address, signal_register, result_register, protocol}
     created_by = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

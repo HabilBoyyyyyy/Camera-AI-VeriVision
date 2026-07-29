@@ -246,20 +246,7 @@ export default function Header({onMenuToggle, dark, toggleDark}) {
             <span className="material-symbols-outlined text-[22px]">menu</span>
           </button>
 
-          {/* Search */}
-          <div
-            className="hidden sm:flex items-center gap-2 border rounded px-3 py-1.5 w-64 xl:w-80"
-            style={{background:"var(--clr-surface)", borderColor:"var(--clr-border)"}}
-          >
-            <span className="material-symbols-outlined text-[18px]" style={{color:"var(--clr-text-muted)"}}>search</span>
-            <input
-              type="text" value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search resources..."
-              className="bg-transparent border-none outline-none text-sm w-full p-0 focus:ring-0"
-              style={{color:"var(--clr-text)"}}
-            />
-          </div>
+          {/* Search removed */}
         </div>
 
         {/* Right */}
