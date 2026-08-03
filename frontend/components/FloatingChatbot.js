@@ -255,6 +255,16 @@ export default function FloatingChatbot() {
                       ? <p className="text-[12px] leading-relaxed">{msg.content}</p>
                       : <div className="text-[12px] leading-relaxed">{parseMessage(msg.content)}</div>
                     }
+                    {!isUser && msg.source && (
+                      <div className="mt-1.5 flex items-center gap-1" style={{opacity: 0.5}}>
+                        <span className="material-symbols-outlined" style={{fontSize: "10px", color: msg.source === "llm" ? "#a855f7" : "var(--clr-text-muted)"}}>
+                          {msg.source === "llm" ? "psychology" : "memory"}
+                        </span>
+                        <span style={{fontSize: "9px", color: msg.source === "llm" ? "#a855f7" : "var(--clr-text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600}}>
+                          {msg.source === "llm" ? "Llama AI" : "Heuristic"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -305,7 +315,7 @@ export default function FloatingChatbot() {
               </button>
             </form>
             <p className="text-[10px] mt-1.5 text-center" style={{color:"var(--clr-text-muted)"}}>
-              Powered by VeriVision AI · Backend required
+              Powered by Heuristic + Llama AI
             </p>
           </div>
         </div>

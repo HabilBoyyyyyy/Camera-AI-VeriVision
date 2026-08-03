@@ -5,11 +5,32 @@ from sqlalchemy import func, desc
 from datetime import datetime, timedelta
 import json
 import re
+import httpx
+import logging
 
 from database import get_db
 from models import InspectionResult, TrainedModel, Dataset, TrainingJob
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/chat", tags=["chatbot"])
+
+# ── Ollama Configuration ──────────────────────────────────────────────────────
+OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+OLLAMA_MODEL = "llama3.2:1b"
+OLLAMA_TIMEOUT = 30.0
+
+CHATBOT_SYSTEM_PROMPT = """You are VeriAssist, an AI assistant embedded in VeriVision — a factory visual inspection platform.
+You help factory operators understand inspection results, yield rates, defects, and system status.
+
+Rules:
+- Be concise: 2-4 sentences maximum.
+- Be specific: use the numbers from the context provided.
+- If the user asks something unrelated to manufacturing/inspection, politely redirect.
+- Use a professional but friendly tone.
+- Do NOT use markdown tables. Use bold (**text**) for emphasis only.
+- Do NOT greet or use filler phrases.
+"""
 
 
 class ChatRequest(BaseModel):
@@ -21,6 +42,7 @@ class ChatResponse(BaseModel):
     role: str
     content: str
     timestamp: str
+    source: str = "heuristic"
 
 
 # ── ML Classifier Setup ───────────────────────────────────────────────────────
@@ -347,6 +369,18 @@ def _handle_summary(db: Session, message: str, **_):
 
 def _classify_intent(message: str) -> str:
     """Classify the user's intent using a TF-IDF + LogisticRegression model."""
+    
+    # ── Conversational Bypass ──
+    # If the user is asking for reasoning, advice, or explanations, bypass the structured
+    # ML intents and force the LLM to handle it.
+    lower_msg = message.lower()
+    conversational_triggers = ["why", "how can", "how do", "what should", "explain", "meaning", "fix"]
+    # We still allow "how many" (count) and "what is" (query) to go to heuristics
+    
+    if any(trigger in lower_msg.split() for trigger in conversational_triggers):
+        class IntentStr(str): pass
+        return IntentStr("unknown")
+
     X = _vectorizer.transform([message])
     probs = _clf.predict_proba(X)[0]
     
@@ -354,7 +388,7 @@ def _classify_intent(message: str) -> str:
     top_intent = _clf.classes_[top_idx]
     confidence = probs[top_idx]
     
-    if confidence < 0.3:
+    if confidence < 0.4:
         class IntentStr(str):
             pass
         res = IntentStr("unknown")
@@ -389,6 +423,95 @@ FALLBACK_RESPONSE = (
 )
 
 
+def _gather_system_context(db: Session) -> str:
+    """Gather live system stats to give the LLM context about the current state."""
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    total = db.query(func.count(InspectionResult.id)).filter(
+        InspectionResult.created_at >= today_start
+    ).scalar() or 0
+    ok = db.query(func.count(InspectionResult.id)).filter(
+        InspectionResult.created_at >= today_start,
+        InspectionResult.verdict == "OK"
+    ).scalar() or 0
+    ng = db.query(func.count(InspectionResult.id)).filter(
+        InspectionResult.created_at >= today_start,
+        InspectionResult.verdict == "NG"
+    ).scalar() or 0
+    yield_pct = round((ok / total) * 100, 1) if total > 0 else 0
+
+    total_models = db.query(func.count(TrainedModel.id)).scalar() or 0
+    deployed = db.query(func.count(TrainedModel.id)).filter(
+        TrainedModel.status == "trained"
+    ).scalar() or 0
+    total_datasets = db.query(func.count(Dataset.id)).scalar() or 0
+    active_jobs = db.query(func.count(TrainingJob.id)).filter(
+        TrainingJob.status.in_(["queued", "training"])
+    ).scalar() or 0
+
+    return (
+        f"Current time: {now.strftime('%Y-%m-%d %H:%M')}\n"
+        f"Inspections today: {total} (OK: {ok}, NG: {ng})\n"
+        f"Yield rate: {yield_pct}%\n"
+        f"Models: {deployed} deployed / {total_models} total\n"
+        f"Datasets: {total_datasets}\n"
+        f"Active training jobs: {active_jobs}"
+    )
+
+
+def _try_ollama(message: str, system_context: str) -> str | None:
+    """Try to get a response from Ollama. Returns None if unavailable."""
+    try:
+        with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
+            # Check if Ollama is running
+            health = client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            if health.status_code != 200:
+                return None
+
+            # Find the right model
+            available = [m["name"] for m in health.json().get("models", [])]
+            model_to_use = None
+            for candidate in [OLLAMA_MODEL, "llama3.2:1b", "llama3.2", "llama3", "mistral", "phi3"]:
+                matching = [m for m in available if candidate in m]
+                if matching:
+                    model_to_use = matching[0]
+                    break
+            if not model_to_use and available:
+                model_to_use = available[0]
+            if not model_to_use:
+                return None
+
+            prompt = (
+                f"Here is the current system status:\n{system_context}\n\n"
+                f"User question: {message}"
+            )
+
+            response = client.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json={
+                    "model": model_to_use,
+                    "system": CHATBOT_SYSTEM_PROMPT,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.7,
+                        "num_predict": 250,
+                    }
+                },
+                timeout=OLLAMA_TIMEOUT,
+            )
+
+            if response.status_code == 200:
+                text = response.json().get("response", "").strip()
+                if text and len(text) > 10:
+                    return text
+    except Exception as e:
+        logger.info(f"Ollama unavailable for chat: {type(e).__name__}: {e}")
+
+    return None
+
+
 @router.post("/", response_model=ChatResponse)
 def chat(req: ChatRequest, db: Session = Depends(get_db)):
     message = req.message.strip()
@@ -398,24 +521,48 @@ def chat(req: ChatRequest, db: Session = Depends(get_db)):
             role="assistant",
             content="Please type a message!",
             timestamp=datetime.utcnow().isoformat(),
+            source="heuristic",
         )
 
     intent = _classify_intent(message)
     handler = HANDLERS.get(intent)
 
+    # ── Known intent → use heuristic handler (fast, structured) ──
     if handler:
         content = handler(db=db, message=message)
-    else:
-        content = FALLBACK_RESPONSE
-        if getattr(intent, "hint", None):
-            content = content.replace(
-                "I'm not sure I understand that.",
-                f"I'm not sure I understand that ({intent.hint})."
-            )
+        return ChatResponse(
+            id=f"bot_{int(datetime.utcnow().timestamp() * 1000)}",
+            role="assistant",
+            content=content,
+            timestamp=datetime.utcnow().isoformat(),
+            source="heuristic",
+        )
+
+    # ── Unknown intent → try LLM first, then fall back ──
+    system_context = _gather_system_context(db)
+    llm_response = _try_ollama(message, system_context)
+
+    if llm_response:
+        return ChatResponse(
+            id=f"bot_{int(datetime.utcnow().timestamp() * 1000)}",
+            role="assistant",
+            content=llm_response,
+            timestamp=datetime.utcnow().isoformat(),
+            source="llm",
+        )
+
+    # ── LLM unavailable → heuristic fallback message ──
+    content = FALLBACK_RESPONSE
+    if getattr(intent, "hint", None):
+        content = content.replace(
+            "I'm not sure I understand that.",
+            f"I'm not sure I understand that ({intent.hint})."
+        )
 
     return ChatResponse(
         id=f"bot_{int(datetime.utcnow().timestamp() * 1000)}",
         role="assistant",
         content=content,
         timestamp=datetime.utcnow().isoformat(),
+        source="heuristic",
     )

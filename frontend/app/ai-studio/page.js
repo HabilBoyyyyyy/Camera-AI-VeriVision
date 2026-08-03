@@ -83,7 +83,10 @@ function DatasetsTab({ onTrainDataset }) {
       await deleteDataset(id);
       setDeleteConfirm(null);
       loadDatasets();
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e);
+      alert(e.message || "Failed to delete dataset."); 
+    }
   };
 
   const handleDrop = (e) => {
@@ -839,7 +842,10 @@ function ModelsTab({ onNewTraining }) {
       await deleteModel(id);
       setDeleteConfirm(null);
       loadModels();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Failed to delete model.");
+    }
   };
 
   const totalDeployed = models.filter(m => m.status === "trained").length;

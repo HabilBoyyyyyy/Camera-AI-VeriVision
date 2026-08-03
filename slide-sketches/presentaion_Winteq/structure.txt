@@ -1,0 +1,19 @@
+presentaion_Winteq
+├── ASTRA-Logo.png
+├── Background1.jpg
+├── Background2.jpg
+├── Background3.jpg
+├── Background4.jpg
+├── Background5.jpg
+├── Background6.webp
+├── Dashboard_Dark_Mode_Slide_10_UI_Modernization.png
+├── Dashboard_Light_Mode_Slide_10_UI_Modernization.png
+├── Database_ERD_Slide_11_Database.png
+├── Dataset_Upload_UI_Slide_8_Automated_Training.png
+├── Live_Monitor_Detection_Slide_13_Live_Demo.png
+├── System_Pipeline_DFD0_Slide_5_Architecture.png
+├── System_Pipeline_DFD1_Slide_5_Architecture.png
+├── System_Pipeline_DFD2_Slide_5_Architecture.png
+├── Template_Builder_Form_Slide_6_Core_Concept.png
+├── Training_Progress_UI_Slide_8_Automated_Training.png
+└── VeriAssist_Chatbot_Response_Slide_9_Chatbot.png
