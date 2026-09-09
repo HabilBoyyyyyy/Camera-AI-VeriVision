@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useEffect, useRef} from "react";
-import {fetchInspectionModels, runInspection, listTemplates} from "@/lib/api";
+import {fetchInspectionModels, runInspection, listTemplates, BASE_URL} from "@/lib/api";
 
 export default function LiveInspectionPage() {
   const [models, setModels] = useState([]);
@@ -102,7 +102,7 @@ export default function LiveInspectionPage() {
 
     let eventSource = null;
     try {
-      eventSource = new EventSource(`http://localhost:8000/api/integrations/events`, {
+      eventSource = new EventSource(`${BASE_URL}/api/integrations/events`, {
         withCredentials: true,
       });
       eventSource.onmessage = (e) => {
@@ -206,7 +206,7 @@ export default function LiveInspectionPage() {
       const res = await runInspection(formData);
       setResult(res);
       if (res?.image_path) {
-        setPreviewSrc(`http://localhost:8000${res.image_path}`);
+        setPreviewSrc(`${BASE_URL}${res.image_path}`);
         // Camera keeps running
       }
     } catch (e) {
@@ -231,7 +231,7 @@ export default function LiveInspectionPage() {
       const res = await runInspection(formData);
       setResult(res);
       if (res?.image_path) {
-        setPreviewSrc(`http://localhost:8000${res.image_path}`);
+        setPreviewSrc(`${BASE_URL}${res.image_path}`);
       }
     } catch (e) {
       console.error(e);

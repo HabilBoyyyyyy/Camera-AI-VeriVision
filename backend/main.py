@@ -33,9 +33,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="VeriVision API", version="2.0.0", lifespan=lifespan)
 
 # CORS
+# ALLOWED_ORIGINS can be a comma-separated list (e.g. for a deployed
+# frontend domain); defaults to the local Next.js dev server.
+_allowed_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[o.strip() for o in _allowed_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

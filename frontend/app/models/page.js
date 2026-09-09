@@ -7,6 +7,7 @@ import {
   getModelDownloadUrl,
   fetchModelVisualizations,
   getTrainingHistory,
+  BASE_URL,
 } from "@/lib/api";
 import TrainingMonitor from "@/components/TrainingMonitor";
 
@@ -270,9 +271,9 @@ export default function ModelsPage() {
                                   <div key={idx} className="vv-card overflow-hidden group relative">
                                     <div className="text-[10px] font-bold px-3 py-2 truncate" style={{color:"var(--clr-text-sub)", borderBottom:"1px solid var(--clr-border)"}}>{vis.name}</div>
                                     <div className="relative aspect-video overflow-hidden" style={{background:"var(--clr-surface-mid)"}}>
-                                      <img src={`http://localhost:8000${vis.url}`} alt={vis.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                      <img src={`${BASE_URL}${vis.url}`} alt={vis.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                     </div>
-                                    <a href={`http://localhost:8000${vis.url}`} target="_blank" rel="noreferrer"
+                                    <a href={`${BASE_URL}${vis.url}`} target="_blank" rel="noreferrer"
                                       className="absolute inset-0 z-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                       style={{background:"rgba(0,0,0,.4)"}}>
                                       <span className="btn-primary text-xs px-3 py-1.5">Full Size</span>
