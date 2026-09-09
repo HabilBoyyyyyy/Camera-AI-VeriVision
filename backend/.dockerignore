@@ -1,0 +1,19 @@
+.venv/
+venv/
+venv311/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.local
+
+# Persistent data — mounted as a volume in production, not baked into
+# the image. Model weight files (*.pt) are fetched by the warm-cache
+# step in the Dockerfile instead of copied from the build context.
+data/
+verivision.db
+*.pt
+
+test_dataset/
+test_yolo_dir/
