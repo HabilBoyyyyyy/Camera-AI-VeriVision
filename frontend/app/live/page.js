@@ -166,13 +166,13 @@ export default function LiveInspectionPage() {
     }
   };
 
-  const stopCamera = () => {
+  function stopCamera() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
     setIsStreaming(false);
-  };
+  }
 
   // Connect stream to video element when isStreaming changes and video element is mounted
   useEffect(() => {

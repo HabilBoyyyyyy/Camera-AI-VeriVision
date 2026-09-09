@@ -70,3 +70,18 @@ ehthumbs_vista.db
 .classpath
 .settings/
 *.pt
+
+# 7. Personal working files (report generation, scratch scripts, extra venvs)
+# These are personal/report-authoring artifacts, not part of the app.
+backend/venv311/
+report_deps/
+New folder/
+build_final_report.py
+convert_to_word.py
+extract_pdfs.py
+extract_refs.py
+generate_report.py
+VeriVision_Bootcamp_Report*.docx
+VeriVision_Bootcamp_Report*.md
+VeriVision_Bootcamp_Report*.txt
+BootcampReport*.pdf

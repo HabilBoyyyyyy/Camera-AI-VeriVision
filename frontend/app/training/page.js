@@ -38,9 +38,7 @@ export default function TrainingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [activeJobId, setActiveJobId] = useState(null);
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  async function loadData() {
     try {
       const [ds, ms, h] = await Promise.all([
         fetchDatasets(),
@@ -51,7 +49,9 @@ export default function TrainingPage() {
       setModels(ms || []);
       setHistory(h || []);
     } catch (e) { console.error(e); }
-  };
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
     const ds = datasets.find((d) => d.id === selectedDatasetId);
