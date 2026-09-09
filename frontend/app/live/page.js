@@ -419,7 +419,6 @@ export default function LiveInspectionPage() {
               <button
                 id="btn-toggle-camera"
                 onClick={isStreaming ? stopCamera : startCamera}
-                disabled={!selectedModelId}
                 className="btn-primary"
                 style={{
                   background: isStreaming ? "var(--clr-error)" : "var(--clr-text)",
