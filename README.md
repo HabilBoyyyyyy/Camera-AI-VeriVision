@@ -12,6 +12,32 @@ Transform Camera AI into a flexible, configurable platform that adapts to differ
 Enable users to configure workflows and integrate with external systems without code changes.
 Reduce dependency on the development team for routine customization requests.
 
+## Getting Started
+
+**Requirements:** Python 3.11+, Node.js 18+.
+
+```bash
+# Backend (FastAPI) — runs on http://localhost:8000
+cd backend
+python -m venv .venv
+.venv\Scripts\activate        # Windows; use `source .venv/bin/activate` on macOS/Linux
+pip install -r requirements.txt
+python main.py
+
+# Frontend (Next.js) — runs on http://localhost:3000, in a second terminal
+cd frontend
+npm install
+npm run dev
+```
+
+Log in with a seeded account: `admin` / `admin123` (full access) or
+`inspector` / `inspect123` (operator role). First run downloads the base
+YOLO/MobileSAM weights automatically via `ultralytics` — needs internet
+access the first time.
+
+Prefer containers? `docker compose up --build` from the repo root runs
+both services together — see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
 ## System Architecture / Pipeline
 
 The pipeline of the system involves input data sources, frontend interfaces, backend AI services, and external outputs.
@@ -198,3 +224,9 @@ flowchart TD
     P4 --> End([Finish])
     V4 --> End
 ```
+
+## Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the full guide — recommended
+platforms (Vercel for the frontend, Render/Railway/Fly for the backend),
+required environment variables, and a single-VPS `docker compose` option.

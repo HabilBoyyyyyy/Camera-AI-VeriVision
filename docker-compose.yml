@@ -1,0 +1,38 @@
+# Runs the full stack (frontend + backend) in containers for a
+# production-like local demo, or as a starting point for self-hosting both
+# on the same VPS. See DEPLOYMENT.md for cloud platform options
+# (Vercel + Render/Railway/Fly is the other common split).
+#
+# Quick start:
+#   docker compose up --build
+#   Frontend: http://localhost:3000  (default login: admin / admin123)
+#   Backend:  http://localhost:8000
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ALLOWED_ORIGINS=http://localhost:3000
+    volumes:
+      # Persists the SQLite DB and all uploaded/trained data across
+      # container restarts and rebuilds.
+      - backend_data:/app/data
+      - backend_db:/app/verivision.db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_data:
+  backend_db:
