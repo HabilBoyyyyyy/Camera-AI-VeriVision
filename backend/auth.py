@@ -1,5 +1,6 @@
 import uuid
 import hashlib
+import bcrypt
 from fastapi import Request, HTTPException, Depends
 from sqlalchemy.orm import Session
 from database import get_db
@@ -8,14 +9,40 @@ import models
 # In-memory session store (simple, no Redis needed for single-server)
 _sessions = {}  # session_id -> {"user_id": ..., "username": ..., "role": ...}
 
+# Bcrypt only looks at the first 72 bytes of a password; longer inputs are
+# truncated up front so hashing never raises on an unusually long password.
+_BCRYPT_MAX_BYTES = 72
+
 
 def hash_password(password: str) -> str:
-    """Simple SHA256 hash. For production, use bcrypt."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash a password with bcrypt."""
+    truncated = password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+    return bcrypt.hashpw(truncated, bcrypt.gensalt()).decode("utf-8")
+
+
+def _is_legacy_sha256(hashed: str) -> bool:
+    """Passwords created before the bcrypt migration were stored as a raw
+    SHA256 hex digest (64 hex chars). Bcrypt hashes always start with
+    "$2..." and are a different length, so this can't false-positive."""
+    return len(hashed) == 64 and all(c in "0123456789abcdef" for c in hashed.lower())
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    return hash_password(password) == hashed
+    if _is_legacy_sha256(hashed):
+        return hashlib.sha256(password.encode()).hexdigest() == hashed
+    try:
+        truncated = password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+        return bcrypt.checkpw(truncated, hashed.encode("utf-8"))
+    except ValueError:
+        return False
+
+
+def upgrade_legacy_hash(db: Session, user: models.User, password: str):
+    """Transparently re-hash a user's password with bcrypt the next time
+    they log in successfully, if they're still on the old SHA256 scheme."""
+    if _is_legacy_sha256(user.password_hash):
+        user.password_hash = hash_password(password)
+        db.commit()
 
 
 def create_session(user: models.User) -> str:

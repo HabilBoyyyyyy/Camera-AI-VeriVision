@@ -14,7 +14,7 @@ ultralytics
 scikit-learn
 
 # Auth
-passlib[bcrypt]
+bcrypt
 
 # Utils
 aiofiles
