@@ -346,7 +346,7 @@ function IntegrationsTab() {
             <div className="vv-card p-8 text-center">
               <span className="material-symbols-outlined text-[48px] block mb-3" style={{ color: "var(--clr-border)" }}>hub</span>
               <p className="text-sm font-medium" style={{ color: "var(--clr-text-muted)" }}>No integrations configured yet.</p>
-              <p className="text-xs mt-1" style={{ color: "var(--clr-text-muted)" }}>Click "New Integration" to connect to external systems.</p>
+              <p className="text-xs mt-1" style={{ color: "var(--clr-text-muted)" }}>Click &quot;New Integration&quot; to connect to external systems.</p>
             </div>
           ) : (
             integrations.map((intg) => (

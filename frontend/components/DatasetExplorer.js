@@ -18,13 +18,7 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
   // Dataset info (classes, task_type)
   const [datasetInfo, setDatasetInfo] = useState(null);
 
-  useEffect(() => {
-    loadImages();
-    // Fetch dataset info for classes
-    fetchDataset(datasetId).then(info => setDatasetInfo(info)).catch(() => {});
-  }, [datasetId]);
-
-  const loadImages = async () => {
+  async function loadImages() {
     try {
       const data = await fetchDatasetImages(datasetId);
       const normalized = (data || []).map(d => ({...d, filename: d.filename.replace(/\\/g, "/")}));
@@ -59,7 +53,13 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
       } catch {}
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  };
+  }
+
+  useEffect(() => {
+    loadImages();
+    // Fetch dataset info for classes
+    fetchDataset(datasetId).then(info => setDatasetInfo(info)).catch(() => {});
+  }, [datasetId]);
 
   const handleDelete = async (filename, e) => {
     e.stopPropagation();

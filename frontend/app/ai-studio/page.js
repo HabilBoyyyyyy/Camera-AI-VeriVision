@@ -495,9 +495,7 @@ function TrainingTab({ preselectedDatasetId, onGoToModels }) {
   const [submitting, setSubmitting] = useState(false);
   const [activeJobId, setActiveJobId] = useState(null);
 
-  useEffect(() => { loadData(); }, []);
-
-  const loadData = async () => {
+  async function loadData() {
     try {
       const [ds, ms, h] = await Promise.all([
         fetchDatasets(),
@@ -508,7 +506,9 @@ function TrainingTab({ preselectedDatasetId, onGoToModels }) {
       setModels(ms || []);
       setHistory(h || []);
     } catch (e) { console.error(e); }
-  };
+  }
+
+  useEffect(() => { loadData(); }, []);
 
   useEffect(() => {
     if (preselectedDatasetId) {

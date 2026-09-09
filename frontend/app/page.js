@@ -161,6 +161,9 @@ export default function DashboardPage() {
   const [alertsExpanded, setAlertsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeJobId, setActiveJobId] = useState(null);
+  const [aiSource, setAiSource] = useState(null);
+  const [aiModel, setAiModel] = useState(null);
+  const [refreshingInsight, setRefreshingInsight] = useState(false);
   const {user} = useAuth();
   const router = useRouter();
 
@@ -192,10 +195,6 @@ export default function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, []);
-
-  const [aiSource, setAiSource] = useState(null);
-  const [aiModel, setAiModel] = useState(null);
-  const [refreshingInsight, setRefreshingInsight] = useState(false);
 
   const handleDismissAlert = async (id) => {
     setAlertsList((prev) => prev.filter((a) => a.id !== id));
@@ -465,7 +464,7 @@ export default function DashboardPage() {
                   <h3
                     className="text-sm font-semibold uppercase tracking-wider"
                     style={{color: "var(--clr-text-sub)"}}>
-                    Today's Yield
+                    Today&apos;s Yield
                   </h3>
                   <p
                     className="text-xs mt-0.5"
