@@ -1,4 +1,6 @@
-const BASE_URL = "http://localhost:8000";
+// Falls back to localhost so local dev keeps working with zero setup;
+// set NEXT_PUBLIC_API_URL to point the frontend at a deployed backend.
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function apiGet(path, redirectOn401 = true) {
   const res = await fetch(`${BASE_URL}${path}`, { credentials: 'include' });

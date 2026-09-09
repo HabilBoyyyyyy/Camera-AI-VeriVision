@@ -1,6 +1,7 @@
 "use client";
 
 import {useAuth} from "@/lib/AuthContext";
+import {BASE_URL} from "@/lib/api";
 import {useState, useRef, useEffect} from "react";
 import {useRouter} from "next/navigation";
 
@@ -89,7 +90,7 @@ function SettingsContent({dark, toggleDark}) {
       label: "System",
       icon: "settings",
       items: [
-        {label:"Backend URL",  description:"API server address",      value:"http://localhost:8000"},
+        {label:"Backend URL",  description:"API server address",      value:BASE_URL},
         {label:"API Version",   description:"Backend API version",     value:"v1.0"},
         {label:"App Version",   description:"VeriVision version",      value:"4.2.1"},
       ],

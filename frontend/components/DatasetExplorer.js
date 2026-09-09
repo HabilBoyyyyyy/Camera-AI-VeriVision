@@ -1,7 +1,7 @@
 "use client";
 
 import {useState, useEffect, useRef} from "react";
-import {fetchDatasetImages, deleteDatasetImage, addImagesToDataset, hasAnnotations, fetchDataset, fetchDatasetAnnotations} from "@/lib/api";
+import {fetchDatasetImages, deleteDatasetImage, addImagesToDataset, hasAnnotations, fetchDataset, fetchDatasetAnnotations, BASE_URL} from "@/lib/api";
 import ImageLabeler from "@/components/ImageLabeler";
 
 export default function DatasetExplorer({datasetId, onUpdate}) {
@@ -207,7 +207,7 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
                   {/* Image */}
                   <div className="w-full aspect-square relative overflow-hidden" style={{background:"var(--clr-surface-mid)"}}>
                     <img
-                      src={`http://localhost:8000${file.url}`}
+                      src={`${BASE_URL}${file.url}`}
                       alt={file.filename}
                       className="w-full h-full object-cover group-hover:opacity-75 transition-opacity"
                       loading="lazy"
@@ -218,7 +218,7 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
                       style={{background:"rgba(0,0,0,.55)"}}
                     >
                       <a
-                        href={`http://localhost:8000${file.url}`}
+                        href={`${BASE_URL}${file.url}`}
                         target="_blank" rel="noreferrer"
                         onClick={e => e.stopPropagation()}
                         className="btn-primary text-[10px] px-2 py-1"
@@ -229,7 +229,7 @@ export default function DatasetExplorer({datasetId, onUpdate}) {
                         onClick={(e) => {
                           e.stopPropagation();
                           setLabelerTarget({
-                            url: `http://localhost:8000${file.url}`,
+                            url: `${BASE_URL}${file.url}`,
                             filename: file.filename,
                           });
                         }}

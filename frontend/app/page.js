@@ -22,11 +22,10 @@ import {
   acknowledgeAlert,
   acknowledgeAllAlerts,
   generateAIInsight,
+  BASE_URL,
 } from "@/lib/api";
 import {useAuth} from "@/lib/AuthContext";
 import TrainingMonitor from "@/components/TrainingMonitor";
-
-const BASE_URL = "http://localhost:8000";
 
 const SEVERITY_CFG = {
   critical: {

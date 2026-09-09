@@ -1,10 +1,8 @@
 "use client";
 
 import {useState, useEffect} from "react";
-import {fetchResults, getResultsExportUrl, fetchModels, deleteResult, submitReview, undoReview, fetchFeedbackStats} from "@/lib/api";
+import {fetchResults, getResultsExportUrl, fetchModels, deleteResult, submitReview, undoReview, fetchFeedbackStats, BASE_URL} from "@/lib/api";
 import Link from "next/link";
-
-const BASE_URL = "http://localhost:8000";
 
 function VerdictBadge({verdict}) {
   if (verdict === "OK")  return <span className="badge badge-pass">✓ PASS</span>;

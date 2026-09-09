@@ -3,8 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/AuthContext";
 import * as api from "@/lib/api";
-
-const BASE_URL = "http://localhost:8000";
+import { BASE_URL } from "@/lib/api";
 
 export default function IntegrationsPage() {
   const { isAdmin } = useAuth();
