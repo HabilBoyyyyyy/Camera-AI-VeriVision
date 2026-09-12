@@ -29,7 +29,17 @@ torch==2.6.0+cpu
 torchvision==0.21.0+cpu
 opencv-python-headless==5.0.0.93
 pillow
-ultralytics
+# ultralytics itself hard-depends on "opencv-python" (the GUI build), not
+# "-headless" — even with opencv-python-headless pinned above, pip/uv
+# installs both (different distribution names, same "cv2" import
+# namespace) and whichever's files land last wins, so cv2 ends up needing
+# libGL regardless. dgenerate-ultralytics-headless is an auto-rebuilt
+# mirror of the real ultralytics releases with that one dependency swapped
+# to opencv-python-headless — same `import ultralytics`, same YOLO/SAM
+# classes, no code changes needed. See
+# https://github.com/ultralytics/ultralytics/issues/7056 and
+# https://pypi.org/project/dgenerate-ultralytics-headless/
+dgenerate-ultralytics-headless
 scikit-learn
 
 # Auth
