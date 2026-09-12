@@ -30,17 +30,30 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db), current_u
 
 
 @router.post("/login")
-def login(req: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == req.username).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     upgrade_legacy_hash(db, user, req.password)
     session_id = create_session(user)
+    # Frontend and backend live on different domains in production (e.g.
+    # a Vercel URL calling a fastapicloud.dev URL), which makes every API
+    # call a cross-site request. A SameSite=Lax cookie is withheld by the
+    # browser on cross-site fetch/XHR (only top-level navigations get it),
+    # so the very next request — checking who's logged in — would look
+    # unauthenticated and bounce back to /login right after a successful
+    # login. SameSite=None fixes that, but browsers only honor None on a
+    # Secure (HTTPS) cookie, and Secure cookies aren't sent back over
+    # plain http://localhost in local dev — so pick based on the actual
+    # scheme the request came in on rather than hardcoding one or the
+    # other.
+    is_https = request.url.scheme == "https"
     response.set_cookie(
         key="session_id",
         value=session_id,
         httponly=True,
-        samesite="lax",
+        samesite="none" if is_https else "lax",
+        secure=is_https,
         max_age=86400,  # 24 hours
     )
     return {"username": user.username, "role": user.role}
@@ -51,7 +64,13 @@ def logout(request: Request, response: Response):
     session_id = request.cookies.get("session_id")
     if session_id:
         delete_session(session_id)
-    response.delete_cookie("session_id")
+    is_https = request.url.scheme == "https"
+    response.delete_cookie(
+        "session_id",
+        httponly=True,
+        samesite="none" if is_https else "lax",
+        secure=is_https,
+    )
     return {"status": "ok"}
 
 
