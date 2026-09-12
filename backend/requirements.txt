@@ -1,4 +1,18 @@
 # VeriVision Backend Dependencies
+#
+# FastAPI Cloud (and other non-Docker hosts) install straight from this
+# file with no apt/system-package step and no way to run a separate
+# "install CPU-only torch first" command like the Dockerfile does. So:
+# - torch/torchvision are pinned to their +cpu build explicitly (pip won't
+#   pick the +cpu wheel over the much larger default CUDA wheel on PyPI
+#   unless the version string forces it) and resolved from the extra
+#   index below.
+# - opencv-python-headless replaces opencv-python: the full build needs
+#   libGL/X11 shared libraries that aren't installable without apt access;
+#   headless skips that GUI code path entirely (this API never opens a
+#   window) and imports fine on a bare Python environment.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 fastapi==0.139.0
 uvicorn[standard]==0.51.0
 sqlalchemy==2.0.51
@@ -8,13 +22,19 @@ pydantic_core==2.46.4
 
 # ML / Vision
 numpy==2.2.6
-opencv-python==5.0.0.93
+torch==2.6.0+cpu
+torchvision==0.21.0+cpu
+opencv-python-headless==5.0.0.93
 pillow
 ultralytics
 scikit-learn
 
 # Auth
 bcrypt
+
+# Database (Postgres in production; see database.py — falls back to
+# SQLite when DATABASE_URL isn't set)
+psycopg2-binary==2.9.13
 
 # Utils
 aiofiles
