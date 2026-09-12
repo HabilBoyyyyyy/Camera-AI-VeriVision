@@ -16,8 +16,29 @@ router = APIRouter(prefix="/api/training", tags=["training"])
 MODELS_DIR = Path("data") / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-# In-memory job progress store (simple, no Redis needed)
+# In-memory job progress store (fast path for a live poll); mirrored to
+# TrainingJob.progress_json in the DB on every epoch too (see
+# _persist_progress) so a server restart mid-training doesn't reset the
+# UI back to "waiting to start" — the DB copy survives even though this
+# dict and the training thread itself do not.
 _job_progress = {}  # job_id -> {"epoch": ..., "total_epochs": ..., "loss": ..., "accuracy": ...}
+
+
+def _persist_progress(job_id: str):
+    """Write the current in-memory progress for job_id into the DB."""
+    progress = _job_progress.get(job_id)
+    if progress is None:
+        return
+    db = SessionLocal()
+    try:
+        job = db.query(models.TrainingJob).filter(models.TrainingJob.id == job_id).first()
+        if job:
+            job.progress_json = json.dumps(progress)
+            if job.status == "queued":
+                job.status = "training"
+            db.commit()
+    finally:
+        db.close()
 
 
 def _run_training(job_id: str, model_id: str, dataset_id: str, config_dict: dict):
@@ -166,9 +187,10 @@ def _train_classification(job_id, dataset_path, output_dir, architecture, epochs
                 _job_progress[job_id]["epochs_history"] = []
             _job_progress[job_id]["epochs_history"].append(hist_entry)
             _job_progress[job_id]["metrics"] = metrics_dict
+            _persist_progress(job_id)
 
     model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
-    
+
     # Find the dataset root (should contain train/ and valid/ folders)
     from validators import _find_root
     root = _find_root(Path(dataset_path))
@@ -253,9 +275,10 @@ def _train_detection(job_id, dataset_path, output_dir, architecture, epochs,
                 _job_progress[job_id]["epochs_history"] = []
             _job_progress[job_id]["epochs_history"].append(hist_entry)
             _job_progress[job_id]["metrics"] = metrics_dict
+            _persist_progress(job_id)
 
     model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
-    
+
     from validators import _find_root
     root = _find_root(Path(dataset_path))
     data_yaml = root / "data.yaml"

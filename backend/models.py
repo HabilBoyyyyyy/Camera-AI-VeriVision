@@ -15,6 +15,17 @@ class User(Base):
     role = Column(String, default="inspector")  # admin or inspector
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class UserSession(Base):
+    """Login sessions, persisted so a server restart (e.g. FastAPI Cloud
+    scaling/restarting the container mid-training) doesn't silently log
+    everyone out — an in-memory dict would be wiped on restart."""
+    __tablename__ = "user_sessions"
+    id = Column(String, primary_key=True)  # the session_id issued to the cookie
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    username = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Dataset(Base):
     __tablename__ = "datasets"
     id = Column(String, primary_key=True, default=generate_uuid)
