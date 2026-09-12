@@ -35,7 +35,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     upgrade_legacy_hash(db, user, req.password)
-    session_id = create_session(user)
+    session_id = create_session(db, user)
     # Frontend and backend live on different domains in production (e.g.
     # a Vercel URL calling a fastapicloud.dev URL), which makes every API
     # call a cross-site request. A SameSite=Lax cookie is withheld by the
@@ -60,10 +60,10 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
 
 
 @router.post("/logout")
-def logout(request: Request, response: Response):
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
     session_id = request.cookies.get("session_id")
     if session_id:
-        delete_session(session_id)
+        delete_session(db, session_id)
     is_https = request.url.scheme == "https"
     response.delete_cookie(
         "session_id",

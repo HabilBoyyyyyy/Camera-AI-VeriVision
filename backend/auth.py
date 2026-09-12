@@ -6,9 +6,6 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models
 
-# In-memory session store (simple, no Redis needed for single-server)
-_sessions = {}  # session_id -> {"user_id": ..., "username": ..., "role": ...}
-
 # Bcrypt only looks at the first 72 bytes of a password; longer inputs are
 # truncated up front so hashing never raises on an unusually long password.
 _BCRYPT_MAX_BYTES = 72
@@ -45,37 +42,43 @@ def upgrade_legacy_hash(db: Session, user: models.User, password: str):
         db.commit()
 
 
-def create_session(user: models.User) -> str:
+def create_session(db: Session, user: models.User) -> str:
     session_id = str(uuid.uuid4())
-    _sessions[session_id] = {
-        "user_id": user.id,
-        "username": user.username,
-        "role": user.role,
-    }
+    db.add(models.UserSession(
+        id=session_id,
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+    ))
+    db.commit()
     return session_id
 
 
-def get_session(session_id: str) -> dict | None:
-    return _sessions.get(session_id)
+def get_session(db: Session, session_id: str) -> dict | None:
+    row = db.query(models.UserSession).filter(models.UserSession.id == session_id).first()
+    if not row:
+        return None
+    return {"user_id": row.user_id, "username": row.username, "role": row.role}
 
 
-def delete_session(session_id: str):
-    _sessions.pop(session_id, None)
+def delete_session(db: Session, session_id: str):
+    db.query(models.UserSession).filter(models.UserSession.id == session_id).delete()
+    db.commit()
 
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
     session_id = request.cookies.get("session_id")
     if not session_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    session = get_session(session_id)
+
+    session = get_session(db, session_id)
     if not session:
         raise HTTPException(status_code=401, detail="Session expired")
-    
+
     user = db.query(models.User).filter(models.User.id == session["user_id"]).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    
+
     return user
 
 
